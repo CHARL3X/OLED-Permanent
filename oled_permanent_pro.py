@@ -612,9 +612,9 @@ class NeuralNetworkAnimation(BaseAnimation):
                         pulse_x = x1 + (x2 - x1) * conn_state['pulse_position']
                         pulse_y = y1 + (y2 - y1) * conn_state['pulse_position']
                         
-                        # Main pulse dot
-                        draw.ellipse([pulse_x - 2, pulse_y - 2, 
-                                    pulse_x + 2, pulse_y + 2], fill=1)
+                        # Main pulse square
+                        draw.rectangle([pulse_x - 2, pulse_y - 2, 
+                                      pulse_x + 2, pulse_y + 2], fill=1)
                         
                         # Trail effect
                         for trail_i in range(3):
@@ -647,22 +647,22 @@ class NeuralNetworkAnimation(BaseAnimation):
                 # Draw glow effect for active neurons
                 if glow > 0.1:
                     glow_size = int(4 * glow)
-                    # Outer glow circle
-                    draw.ellipse([x - glow_size, y - glow_size,
-                                x + glow_size, y + glow_size], outline=1)
+                    # Outer glow square
+                    draw.rectangle([x - glow_size, y - glow_size,
+                                  x + glow_size, y + glow_size], outline=1)
                 
                 # Draw charging effect (gentler pulsing)
                 if charge > 0 and charge < 1:
                     # Pulsing effect while charging
                     pulse = math.sin(self.wave_phase * 2 + j) * 0.5 + 0.5
                     if pulse * charge > 0.4:
-                        draw.ellipse([x - 1, y - 1, x + 1, y + 1], outline=1)
+                        draw.rectangle([x - 1, y - 1, x + 1, y + 1], outline=1)
                 
                 # Draw main neuron
                 if activation > 0.1:
-                    # Active neuron - filled circle
+                    # Active neuron - filled square
                     size = 3 if activation > 0.7 else 2
-                    draw.ellipse([x - size, y - size, x + size, y + size], fill=1)
+                    draw.rectangle([x - size, y - size, x + size, y + size], fill=1)
                 else:
                     # Inactive neuron - single point
                     draw.point((x, y), fill=1)
@@ -689,8 +689,8 @@ class NeuralNetworkAnimation(BaseAnimation):
             if int(self.wave_phase * 10) % 2 == 0:
                 for corner_x in [2, self.config.width - 3]:
                     for corner_y in [2, self.config.height - 3]:
-                        draw.ellipse([corner_x - 1, corner_y - 1,
-                                    corner_x + 1, corner_y + 1], outline=1)
+                        draw.rectangle([corner_x - 1, corner_y - 1,
+                                      corner_x + 1, corner_y + 1], outline=1)
 
 
 class EnhancedStarfieldAnimation(BaseAnimation):
