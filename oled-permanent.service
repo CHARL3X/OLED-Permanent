@@ -1,0 +1,16 @@
+[Unit]
+Description=OLED Permanent Animation Controller
+After=multi-user.target
+
+[Service]
+Type=simple
+User=morph
+WorkingDirectory=/home/morph/01_Code/OLED-Permanent
+ExecStart=/usr/bin/python3 /home/morph/01_Code/OLED-Permanent/oled_permanent_pro.py --cycle --cycle-time 45
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
