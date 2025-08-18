@@ -480,21 +480,21 @@ class NeuralNetworkAnimation(BaseAnimation):
         if not super().update(dt):
             return False
         
-        # Update wave phase for synchronized effects
-        self.wave_phase += dt * 2
+        # Update wave phase for synchronized effects (slower)
+        self.wave_phase += dt * 0.5
         
-        # Random burst mode activation
-        if not self.burst_mode and random.random() < 0.005:
+        # Random burst mode activation (much less frequent)
+        if not self.burst_mode and random.random() < 0.001:
             self.burst_mode = True
-            self.burst_timer = random.uniform(2, 4)
+            self.burst_timer = random.uniform(1, 2)
         
         if self.burst_timer > 0:
             self.burst_timer -= dt
             if self.burst_timer <= 0:
                 self.burst_mode = False
         
-        # Generate new signals
-        spawn_rate = 0.3 if self.burst_mode else 0.08
+        # Generate new signals (much slower rate)
+        spawn_rate = 0.1 if self.burst_mode else 0.02
         if random.random() < spawn_rate:
             # Start new signal at input layer
             input_neuron = random.randint(0, self.layers[0] - 1)
@@ -511,9 +511,9 @@ class NeuralNetworkAnimation(BaseAnimation):
         # Update neuron charging and states
         for i in range(len(self.layers)):
             for j in range(self.layers[i]):
-                # Charge build-up
+                # Charge build-up (slower)
                 if self.neuron_charge[i][j] > 0:
-                    self.neuron_charge[i][j] += dt * 3
+                    self.neuron_charge[i][j] += dt * 0.8
                     
                     # Fire when fully charged
                     if self.neuron_charge[i][j] >= 1.0:
@@ -529,9 +529,9 @@ class NeuralNetworkAnimation(BaseAnimation):
                                     conn_state['is_pulsing'] = True
                                     conn_state['pulse_position'] = 0
                 
-                # State decay
-                self.neuron_states[i][j] = max(0, self.neuron_states[i][j] - dt * 1.5)
-                self.neuron_glow[i][j] = max(0, self.neuron_glow[i][j] - dt * 2)
+                # State decay (much slower for calming effect)
+                self.neuron_states[i][j] = max(0, self.neuron_states[i][j] - dt * 0.5)
+                self.neuron_glow[i][j] = max(0, self.neuron_glow[i][j] - dt * 0.8)
         
         # Update connection pulses
         for i in range(len(self.connection_states)):
@@ -539,9 +539,9 @@ class NeuralNetworkAnimation(BaseAnimation):
                 for k in range(len(self.connection_states[i][j])):
                     conn_state = self.connection_states[i][j][k]
                     
-                    # Update pulse position
+                    # Update pulse position (slower travel speed)
                     if conn_state['is_pulsing']:
-                        conn_state['pulse_position'] += dt * 3
+                        conn_state['pulse_position'] += dt * 1.2
                         
                         # Pulse reached target
                         if conn_state['pulse_position'] >= 1.0:
@@ -551,18 +551,18 @@ class NeuralNetworkAnimation(BaseAnimation):
                             self.neuron_charge[i + 1][k] = min(1.0,
                                                               self.neuron_charge[i + 1][k] + 0.3)
                     
-                    # Update connection intensity (visual glow)
-                    target_intensity = 0.8 if conn_state['is_pulsing'] else 0
-                    conn_state['intensity'] += (target_intensity - conn_state['intensity']) * dt * 5
+                    # Update connection intensity (slower transitions)
+                    target_intensity = 0.6 if conn_state['is_pulsing'] else 0
+                    conn_state['intensity'] += (target_intensity - conn_state['intensity']) * dt * 2
                     
                     # Store in history for persistence effect
                     if conn_state['intensity'] > 0.1:
                         conn_state['history'].append(conn_state['intensity'])
         
-        # Calculate layer activity levels
+        # Calculate layer activity levels (smooth transitions)
         for i in range(len(self.layers)):
             activity = sum(self.neuron_states[i]) / self.layers[i]
-            self.layer_activity[i] += (activity - self.layer_activity[i]) * dt * 3
+            self.layer_activity[i] += (activity - self.layer_activity[i]) * dt * 1
         
         # Update activity heatmap
         for y in range(len(self.activity_map)):
@@ -632,9 +632,9 @@ class NeuralNetworkAnimation(BaseAnimation):
                             if random.random() < recent_intensity:
                                 draw.line([(x1, y1), (x2, y2)], fill=1)
                     
-                    # Subtle flickering for strong connections
-                    elif weight > 0.7 and random.random() < 0.05:
-                        # Occasional flicker on strong but inactive connections
+                    # Subtle flickering for strong connections (much less frequent)
+                    elif weight > 0.8 and random.random() < 0.01:
+                        # Very occasional flicker on strong but inactive connections
                         draw.line([(x1, y1), (x2, y2)], fill=1)
         
         # Draw neurons with enhanced effects
@@ -651,12 +651,12 @@ class NeuralNetworkAnimation(BaseAnimation):
                     draw.ellipse([x - glow_size, y - glow_size,
                                 x + glow_size, y + glow_size], outline=1)
                 
-                # Draw charging effect
+                # Draw charging effect (gentler pulsing)
                 if charge > 0 and charge < 1:
                     # Pulsing effect while charging
-                    pulse = math.sin(self.wave_phase * 5 + j) * 0.5 + 0.5
-                    if pulse * charge > 0.3:
-                        draw.ellipse([x - 2, y - 2, x + 2, y + 2], outline=1)
+                    pulse = math.sin(self.wave_phase * 2 + j) * 0.5 + 0.5
+                    if pulse * charge > 0.4:
+                        draw.ellipse([x - 1, y - 1, x + 1, y + 1], outline=1)
                 
                 # Draw main neuron
                 if activation > 0.1:
