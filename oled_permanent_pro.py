@@ -944,10 +944,16 @@ class OLEDController:
             animation_class = self.animations[animation_type]
             self.current_animation = animation_class(self.config)
             print(f"Switched to {animation_type.value} animation")
+        else:
+            print(f"Warning: {animation_type.value} animation not implemented, skipping...")
+            return False
+        return True
     
     def run_single(self, animation_type: AnimationType):
         """Run a single animation"""
-        self.set_animation(animation_type)
+        if not self.set_animation(animation_type):
+            print(f"Cannot run {animation_type.value} - not implemented")
+            return
         self.running = True
         
         frame_time = 1.0 / self.config.fps
@@ -981,17 +987,28 @@ class OLEDController:
     
     def run_cycle(self, animations: List[AnimationType], cycle_time: float = 10):
         """Cycle through multiple animations"""
+        # Filter out unimplemented animations
+        valid_animations = [a for a in animations if a in self.animations]
+        
+        if not valid_animations:
+            print("No valid animations to cycle through!")
+            return
+        
         self.running = True
         animation_index = 0
         
-        print(f"Cycling through {len(animations)} animations every {cycle_time}s")
+        print(f"Cycling through {len(valid_animations)} animations every {cycle_time}s")
+        print("Available animations:", [a.value for a in valid_animations])
         print("Press Ctrl+C to stop")
         
         while self.running:
             try:
                 # Set current animation
-                current_type = animations[animation_index]
-                self.set_animation(current_type)
+                current_type = valid_animations[animation_index]
+                if not self.set_animation(current_type):
+                    # Skip to next if this one fails
+                    animation_index = (animation_index + 1) % len(valid_animations)
+                    continue
                 
                 # Run animation for cycle_time seconds
                 start_time = time.time()
@@ -1018,10 +1035,52 @@ class OLEDController:
                         time.sleep(0.001)
                 
                 # Move to next animation
-                animation_index = (animation_index + 1) % len(animations)
+                animation_index = (animation_index + 1) % len(valid_animations)
                 
             except KeyboardInterrupt:
                 break
+    
+    def list_animations(self):
+        """List all available animations"""
+        print("\nAvailable Animations:")
+        print("-" * 30)
+        implemented = []
+        for anim_type in AnimationType:
+            if anim_type in self.animations:
+                implemented.append(anim_type)
+                print(f"✓ {anim_type.value:<15} - Ready")
+            else:
+                print(f"  {anim_type.value:<15} - Not implemented")
+        print("-" * 30)
+        return implemented
+    
+    def interactive_select(self):
+        """Interactive animation selection"""
+        implemented = self.list_animations()
+        
+        if not implemented:
+            print("No animations available!")
+            return None
+        
+        print("\nSelect an animation:")
+        for i, anim in enumerate(implemented, 1):
+            print(f"{i}) {anim.value}")
+        print("0) Cancel")
+        
+        while True:
+            try:
+                choice = input("\nEnter number: ").strip()
+                if choice == "0":
+                    return None
+                idx = int(choice) - 1
+                if 0 <= idx < len(implemented):
+                    return implemented[idx]
+                else:
+                    print("Invalid selection, try again.")
+            except (ValueError, EOFError):
+                print("Invalid input, try again.")
+            except KeyboardInterrupt:
+                return None
     
     def stop(self):
         """Stop animations and clear display"""
@@ -1047,6 +1106,12 @@ def main():
                        help='Cycle through all animations')
     parser.add_argument('--cycle-time', '-t', type=float, default=45,
                        help='Time per animation in cycle mode (seconds)')
+    parser.add_argument('--list', '-l', action='store_true',
+                       help='List all available animations')
+    parser.add_argument('--interactive', '-i', action='store_true',
+                       help='Interactive animation selection')
+    parser.add_argument('--loop', action='store_true',
+                       help='Loop single animation forever (use with -a)')
     parser.add_argument('--fps', '-f', type=int, default=20,
                        help='Frames per second')
     parser.add_argument('--address', type=lambda x: int(x, 0), default=0x3C,
@@ -1073,19 +1138,40 @@ def main():
     # Create controller
     controller = OLEDController(config)
     
+    # Handle list option before initializing display
+    if args.list:
+        controller.list_animations()
+        sys.exit(0)
+    
     # Initialize display
     if not controller.initialize():
         sys.exit(1)
     
     try:
-        if args.cycle:
+        if args.interactive:
+            # Interactive selection mode
+            selected = controller.interactive_select()
+            if selected:
+                if args.loop:
+                    # Loop forever
+                    while True:
+                        controller.run_single(selected)
+                else:
+                    controller.run_single(selected)
+        elif args.cycle:
             # Cycle through all animations
             animations = list(AnimationType)
             controller.run_cycle(animations, args.cycle_time)
         elif args.animation:
             # Run specific animation
             animation_type = AnimationType(args.animation)
-            controller.run_single(animation_type)
+            if args.loop:
+                # Loop single animation forever
+                print(f"Looping {args.animation} forever (Press Ctrl+C to stop)")
+                while True:
+                    controller.run_single(animation_type)
+            else:
+                controller.run_single(animation_type)
         else:
             # Default: cycle through professional animations
             pro_animations = [
