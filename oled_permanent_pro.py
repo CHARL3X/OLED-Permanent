@@ -412,7 +412,7 @@ class SpectrumAnalyzerAnimation(BaseAnimation):
 
 
 class NeuralNetworkAnimation(BaseAnimation):
-    """Neural network visualization"""
+    """Enhanced neural network visualization with smooth signal propagation"""
     
     def __init__(self, config: AnimationConfig):
         super().__init__(config)
@@ -421,7 +421,10 @@ class NeuralNetworkAnimation(BaseAnimation):
         self.layers = [4, 6, 6, 3]  # Neurons per layer
         self.layer_positions = []
         self.connections = []
+        self.connection_states = []  # Visual state of each connection
         self.neuron_states = []
+        self.neuron_charge = []  # Build-up before activation
+        self.neuron_glow = []  # Glow effect intensity
         
         # Calculate positions
         layer_spacing = config.width // (len(self.layers) + 1)
@@ -436,89 +439,258 @@ class NeuralNetworkAnimation(BaseAnimation):
             
             self.layer_positions.append(layer_neurons)
             self.neuron_states.append([0] * num_neurons)
+            self.neuron_charge.append([0] * num_neurons)
+            self.neuron_glow.append([0] * num_neurons)
         
-        # Initialize connections
+        # Initialize connections with visual states
         for i in range(len(self.layers) - 1):
             layer_connections = []
+            layer_connection_states = []
             for j in range(self.layers[i]):
                 neuron_connections = []
+                neuron_connection_states = []
                 for k in range(self.layers[i + 1]):
-                    neuron_connections.append(random.uniform(0.2, 1.0))
+                    weight = random.uniform(0.3, 1.0)
+                    neuron_connections.append(weight)
+                    neuron_connection_states.append({
+                        'intensity': 0,
+                        'pulse_position': 0,  # 0 to 1 along the connection
+                        'is_pulsing': False,
+                        'history': deque(maxlen=5)  # Persistence effect
+                    })
                 layer_connections.append(neuron_connections)
+                layer_connection_states.append(neuron_connection_states)
             self.connections.append(layer_connections)
+            self.connection_states.append(layer_connection_states)
         
-        self.signal_layer = 0
-        self.signal_neuron = 0
+        # Multiple signal tracking
+        self.active_signals = []
+        
+        # Visual effects
+        self.burst_mode = False
+        self.burst_timer = 0
+        self.wave_phase = 0
+        self.activity_map = [[0 for _ in range(config.width // 4)] 
+                             for _ in range(config.height // 4)]
+        
+        # Layer activity meters
+        self.layer_activity = [0] * len(self.layers)
         
     def update(self, dt: float) -> bool:
         if not super().update(dt):
             return False
         
-        # Propagate signal through network
-        if random.random() < 0.1:
-            # Start new signal
-            self.signal_layer = 0
-            self.signal_neuron = random.randint(0, self.layers[0] - 1)
-            self.neuron_states[0][self.signal_neuron] = 1.0
+        # Update wave phase for synchronized effects
+        self.wave_phase += dt * 2
         
-        # Update neuron states
-        for i, layer_states in enumerate(self.neuron_states):
-            for j, state in enumerate(layer_states):
-                # Decay
-                self.neuron_states[i][j] = max(0, state - dt * 2)
+        # Random burst mode activation
+        if not self.burst_mode and random.random() < 0.005:
+            self.burst_mode = True
+            self.burst_timer = random.uniform(2, 4)
         
-        # Propagate signals
-        if random.random() < 0.3 and self.signal_layer < len(self.layers) - 1:
-            # Propagate to next layer
-            current_layer = self.signal_layer
-            current_neuron = self.signal_neuron
+        if self.burst_timer > 0:
+            self.burst_timer -= dt
+            if self.burst_timer <= 0:
+                self.burst_mode = False
+        
+        # Generate new signals
+        spawn_rate = 0.3 if self.burst_mode else 0.08
+        if random.random() < spawn_rate:
+            # Start new signal at input layer
+            input_neuron = random.randint(0, self.layers[0] - 1)
+            self.neuron_charge[0][input_neuron] = min(1.0, 
+                                                      self.neuron_charge[0][input_neuron] + 0.5)
             
-            if self.neuron_states[current_layer][current_neuron] > 0.5:
-                next_layer = current_layer + 1
-                # Activate connected neurons
-                for k in range(self.layers[next_layer]):
-                    weight = self.connections[current_layer][current_neuron][k]
-                    if random.random() < weight:
-                        self.neuron_states[next_layer][k] = 1.0
+            self.active_signals.append({
+                'layer': 0,
+                'neuron': input_neuron,
+                'strength': random.uniform(0.7, 1.0),
+                'age': 0
+            })
+        
+        # Update neuron charging and states
+        for i in range(len(self.layers)):
+            for j in range(self.layers[i]):
+                # Charge build-up
+                if self.neuron_charge[i][j] > 0:
+                    self.neuron_charge[i][j] += dt * 3
+                    
+                    # Fire when fully charged
+                    if self.neuron_charge[i][j] >= 1.0:
+                        self.neuron_states[i][j] = 1.0
+                        self.neuron_glow[i][j] = 1.0
+                        self.neuron_charge[i][j] = 0
+                        
+                        # Trigger connections to next layer
+                        if i < len(self.layers) - 1:
+                            for k in range(self.layers[i + 1]):
+                                conn_state = self.connection_states[i][j][k]
+                                if random.random() < self.connections[i][j][k]:
+                                    conn_state['is_pulsing'] = True
+                                    conn_state['pulse_position'] = 0
                 
-                self.signal_layer = next_layer
-                if self.layers[next_layer] > 0:
-                    self.signal_neuron = random.randint(0, self.layers[next_layer] - 1)
+                # State decay
+                self.neuron_states[i][j] = max(0, self.neuron_states[i][j] - dt * 1.5)
+                self.neuron_glow[i][j] = max(0, self.neuron_glow[i][j] - dt * 2)
+        
+        # Update connection pulses
+        for i in range(len(self.connection_states)):
+            for j in range(len(self.connection_states[i])):
+                for k in range(len(self.connection_states[i][j])):
+                    conn_state = self.connection_states[i][j][k]
+                    
+                    # Update pulse position
+                    if conn_state['is_pulsing']:
+                        conn_state['pulse_position'] += dt * 3
+                        
+                        # Pulse reached target
+                        if conn_state['pulse_position'] >= 1.0:
+                            conn_state['is_pulsing'] = False
+                            conn_state['pulse_position'] = 0
+                            # Charge target neuron
+                            self.neuron_charge[i + 1][k] = min(1.0,
+                                                              self.neuron_charge[i + 1][k] + 0.3)
+                    
+                    # Update connection intensity (visual glow)
+                    target_intensity = 0.8 if conn_state['is_pulsing'] else 0
+                    conn_state['intensity'] += (target_intensity - conn_state['intensity']) * dt * 5
+                    
+                    # Store in history for persistence effect
+                    if conn_state['intensity'] > 0.1:
+                        conn_state['history'].append(conn_state['intensity'])
+        
+        # Calculate layer activity levels
+        for i in range(len(self.layers)):
+            activity = sum(self.neuron_states[i]) / self.layers[i]
+            self.layer_activity[i] += (activity - self.layer_activity[i]) * dt * 3
+        
+        # Update activity heatmap
+        for y in range(len(self.activity_map)):
+            for x in range(len(self.activity_map[0])):
+                self.activity_map[y][x] *= 0.95  # Decay
+        
+        # Add activity around active neurons
+        for i, layer_neurons in enumerate(self.layer_positions):
+            for j, (nx, ny) in enumerate(layer_neurons):
+                if self.neuron_states[i][j] > 0:
+                    map_x = int(nx / 4)
+                    map_y = int(ny / 4)
+                    if 0 <= map_x < len(self.activity_map[0]) and 0 <= map_y < len(self.activity_map):
+                        self.activity_map[map_y][map_x] = min(1.0, 
+                                                             self.activity_map[map_y][map_x] + 0.5)
+        
+        # Clean up old signals
+        self.active_signals = [s for s in self.active_signals if s['age'] < 3]
+        for signal in self.active_signals:
+            signal['age'] += dt
         
         return True
     
     def render(self, draw: ImageDraw) -> None:
-        # Draw connections
+        # Draw activity heatmap (subtle background)
+        for y in range(0, self.config.height, 4):
+            for x in range(0, self.config.width, 4):
+                map_x = x // 4
+                map_y = y // 4
+                if (map_y < len(self.activity_map) and map_x < len(self.activity_map[0])):
+                    if self.activity_map[map_y][map_x] > 0.2:
+                        if random.random() < self.activity_map[map_y][map_x] * 0.3:
+                            draw.point((x, y), fill=1)
+        
+        # Draw connections with enhanced effects
         for i in range(len(self.connections)):
             for j, neuron_connections in enumerate(self.connections[i]):
                 x1, y1 = self.layer_positions[i][j]
                 
                 for k, weight in enumerate(neuron_connections):
                     x2, y2 = self.layer_positions[i + 1][k]
+                    conn_state = self.connection_states[i][j][k]
                     
-                    # Draw connection if active
-                    source_active = self.neuron_states[i][j] > 0.1
-                    target_active = self.neuron_states[i + 1][k] > 0.1
+                    # Draw connection based on state
+                    if conn_state['is_pulsing']:
+                        # Draw traveling pulse
+                        pulse_x = x1 + (x2 - x1) * conn_state['pulse_position']
+                        pulse_y = y1 + (y2 - y1) * conn_state['pulse_position']
+                        
+                        # Main pulse dot
+                        draw.ellipse([pulse_x - 2, pulse_y - 2, 
+                                    pulse_x + 2, pulse_y + 2], fill=1)
+                        
+                        # Trail effect
+                        for trail_i in range(3):
+                            trail_pos = max(0, conn_state['pulse_position'] - trail_i * 0.1)
+                            trail_x = x1 + (x2 - x1) * trail_pos
+                            trail_y = y1 + (y2 - y1) * trail_pos
+                            if trail_i < 2:
+                                draw.point((int(trail_x), int(trail_y)), fill=1)
                     
-                    if source_active or target_active:
-                        # Draw with intensity based on activation
-                        if source_active and target_active:
-                            draw.line([(x1, y1), (x2, y2)], fill=1)
-                        elif random.random() < 0.3:  # Sparse for inactive
-                            draw.line([(x1, y1), (x2, y2)], fill=1)
+                    # Draw persistent connection based on intensity
+                    elif conn_state['intensity'] > 0.1 or len(conn_state['history']) > 0:
+                        # Use history for fading effect
+                        if len(conn_state['history']) > 0:
+                            recent_intensity = conn_state['history'][-1]
+                            if random.random() < recent_intensity:
+                                draw.line([(x1, y1), (x2, y2)], fill=1)
+                    
+                    # Subtle flickering for strong connections
+                    elif weight > 0.7 and random.random() < 0.05:
+                        # Occasional flicker on strong but inactive connections
+                        draw.line([(x1, y1), (x2, y2)], fill=1)
         
-        # Draw neurons
+        # Draw neurons with enhanced effects
         for i, layer_neurons in enumerate(self.layer_positions):
             for j, (x, y) in enumerate(layer_neurons):
                 activation = self.neuron_states[i][j]
+                charge = self.neuron_charge[i][j]
+                glow = self.neuron_glow[i][j]
                 
+                # Draw glow effect for active neurons
+                if glow > 0.1:
+                    glow_size = int(4 * glow)
+                    # Outer glow circle
+                    draw.ellipse([x - glow_size, y - glow_size,
+                                x + glow_size, y + glow_size], outline=1)
+                
+                # Draw charging effect
+                if charge > 0 and charge < 1:
+                    # Pulsing effect while charging
+                    pulse = math.sin(self.wave_phase * 5 + j) * 0.5 + 0.5
+                    if pulse * charge > 0.3:
+                        draw.ellipse([x - 2, y - 2, x + 2, y + 2], outline=1)
+                
+                # Draw main neuron
                 if activation > 0.1:
-                    # Active neuron
-                    size = 2 if activation > 0.5 else 1
+                    # Active neuron - filled circle
+                    size = 3 if activation > 0.7 else 2
                     draw.ellipse([x - size, y - size, x + size, y + size], fill=1)
                 else:
-                    # Inactive neuron
+                    # Inactive neuron - single point
                     draw.point((x, y), fill=1)
+        
+        # Draw layer activity indicators at bottom
+        bar_width = self.config.width // len(self.layers)
+        for i, activity in enumerate(self.layer_activity):
+            if activity > 0.1:
+                x_start = i * bar_width + 5
+                x_end = x_start + bar_width - 10
+                y = self.config.height - 3
+                bar_length = int((x_end - x_start) * activity)
+                
+                # Activity bar
+                draw.line([(x_start, y), (x_start + bar_length, y)], fill=1)
+                
+                # Tick marks
+                draw.point((x_start, y - 1), fill=1)
+                draw.point((x_start + bar_length, y - 1), fill=1)
+        
+        # Draw burst mode indicator
+        if self.burst_mode:
+            # Flash corners during burst
+            if int(self.wave_phase * 10) % 2 == 0:
+                for corner_x in [2, self.config.width - 3]:
+                    for corner_y in [2, self.config.height - 3]:
+                        draw.ellipse([corner_x - 1, corner_y - 1,
+                                    corner_x + 1, corner_y + 1], outline=1)
 
 
 class EnhancedStarfieldAnimation(BaseAnimation):
