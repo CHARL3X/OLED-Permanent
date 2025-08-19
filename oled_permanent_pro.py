@@ -1531,15 +1531,15 @@ class GeometricAnimation(BaseAnimation):
         # Orange zone (scrolls right)
         self.orange_scroll = 0
         
-        # Blue zone waves (scroll left)
+        # Blue zone waves (scroll right)
         self.wave_phases = []
-        for i in range(6):  # 6 waves for fuller look
+        for i in range(8):  # 8 waves for good balance
             self.wave_phases.append({
                 'offset': 0,
-                'frequency': 1.0 + i * 0.08,  # Slightly different frequencies
-                'amplitude': 5,  # Slightly smaller for more waves
-                'y_base': self.boundary + 6 + i * 7,  # Tighter spacing
-                'alignment_phase': i * math.pi / 6  # Start with different phases
+                'frequency': 1.0 + i * 0.06,  # Slightly different frequencies
+                'amplitude': 8,  # Increased amplitude for more waviness
+                'y_base': self.boundary + 5 + i * 5.5,  # Spaced for 8 waves
+                'alignment_phase': i * math.pi / 8  # Start with different phases
             })
         
         # Alignment oscillator (causes waves to sync/desync)
