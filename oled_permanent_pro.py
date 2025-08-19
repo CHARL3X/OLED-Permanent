@@ -1558,25 +1558,22 @@ class GeometricAnimation(BaseAnimation):
                     draw.point((x, row), fill=1)
                     draw.point((x+1, row), fill=1)
         
-        # === BLUE ZONE - Beautiful flowing waves ===
-        # Multiple wave layers with different frequencies
-        for layer in range(self.wave_layers):
-            # Each layer has different spacing and phase
-            row_spacing = 4 + layer * 2
-            phase_offset = layer * math.pi / 3
-            amplitude = self.wave_amplitude * (1 - layer * 0.2)  # Decreasing amplitude
+        # === BLUE ZONE - Simple flowing waves ===
+        # Just 2 clean wave lines
+        for wave_num in range(2):
+            row_base = self.boundary + 20 + wave_num * 30
+            phase_offset = wave_num * math.pi / 2
             
-            for row in range(self.boundary + 4 + layer * 2, self.config.height - 4, row_spacing):
-                for x in range(self.config.width):
-                    # Different frequency for each layer
-                    frequency = 0.2 - layer * 0.05
-                    wave_offset = math.sin(x * frequency + self.pattern_phase + phase_offset) * amplitude
-                    y = row + int(wave_offset)
-                    
-                    if self.boundary < y < self.config.height:
-                        # Vary point density for depth effect
-                        if layer == 0 or (layer == 1 and x % 2 == 0) or (layer == 2 and x % 3 == 0):
-                            draw.point((x, y), fill=1)
+            for x in range(0, self.config.width, 2):  # Every other pixel for cleaner look
+                wave_offset = math.sin(x * 0.15 + self.pattern_phase + phase_offset) * self.wave_amplitude
+                y = row_base + int(wave_offset)
+                
+                if self.boundary < y < self.config.height:
+                    draw.point((x, y), fill=1)
+                    if x > 0:  # Connect points for smoother wave
+                        prev_y = row_base + int(math.sin((x-2) * 0.15 + self.pattern_phase + phase_offset) * self.wave_amplitude)
+                        if abs(y - prev_y) < 10:
+                            draw.line([(x-2, prev_y), (x, y)], fill=1)
 
 
 class ParticleAnimation(BaseAnimation):
