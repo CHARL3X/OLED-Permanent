@@ -43,6 +43,8 @@ class AnimationType(Enum):
     NEURAL = "neural"
     HORIZON = "horizon"
     THERMAL = "thermal"
+    PLASMAFLOW = "plasmaflow"
+    QUANTUMFIELD = "quantumfield"
 
 
 @dataclass
@@ -1902,6 +1904,543 @@ class GlitchAnimation(BaseAnimation):
                     draw.line([(0, y), (self.config.width - 1, y)], fill=1)
 
 
+class PlasmaFlowAnimation(BaseAnimation):
+    """Plasma Flow - Spectrum analyzer meets liquid physics with flowing energy"""
+    
+    def __init__(self, config: AnimationConfig):
+        super().__init__(config)
+        
+        # Spectrum-style bars but with plasma physics
+        self.num_bars = 12
+        self.bar_width = config.width // self.num_bars - 1
+        
+        # Each bar has multiple properties for plasma simulation
+        self.bars = []
+        for i in range(self.num_bars):
+            self.bars.append({
+                'height': 0,
+                'target_height': 0,
+                'velocity': 0,
+                'energy': 0,
+                'plasma_temp': random.uniform(0.3, 1.0),
+                'flow_phase': random.uniform(0, math.pi * 2),
+                'peak_height': 0,
+                'peak_decay': 0,
+                # Plasma tendrils connecting bars
+                'tendrils': []
+            })
+        
+        # Plasma field grid for background effects
+        self.plasma_field = [[0 for _ in range(config.width // 4)] 
+                             for _ in range(config.height // 4)]
+        
+        # Flow particles that move between bars
+        self.flow_particles = []
+        for _ in range(20):
+            self.flow_particles.append({
+                'x': random.uniform(0, config.width),
+                'y': random.uniform(0, config.height),
+                'vx': random.uniform(-2, 2),
+                'vy': 0,
+                'life': 1.0,
+                'energy': random.uniform(0.5, 1.0)
+            })
+        
+        # Energy waves that propagate through bars
+        self.energy_waves = []
+        self.wave_spawn_timer = 0
+        
+        # Global plasma temperature affects all dynamics
+        self.global_temp = 0.5
+        self.temp_target = 0.5
+        
+    def update(self, dt: float) -> bool:
+        if not super().update(dt):
+            return False
+        
+        # Update global temperature (creates overall mood changes)
+        self.temp_target = 0.3 + math.sin(self.phase * 0.2) * 0.3 + random.uniform(-0.1, 0.1)
+        self.global_temp += (self.temp_target - self.global_temp) * 0.1
+        
+        # Generate spectrum-like targets with plasma influence
+        for i, bar in enumerate(self.bars):
+            # Base frequency response like spectrum
+            freq_factor = 1.0 - (i / self.num_bars) * 0.3
+            base = math.sin(self.phase * (i + 1) * 0.3) * 0.5 + 0.5
+            
+            # Add plasma temperature influence
+            plasma_boost = bar['plasma_temp'] * self.global_temp * 0.3
+            bar['target_height'] = (base * freq_factor + plasma_boost) * (self.config.height - 10)
+            
+            # Physics-based movement with spring dynamics
+            spring_force = (bar['target_height'] - bar['height']) * 0.2
+            damping = bar['velocity'] * 0.1
+            bar['velocity'] += spring_force - damping
+            bar['height'] += bar['velocity'] * dt * 5
+            
+            # Update plasma temperature (affects color intensity)
+            bar['plasma_temp'] += random.uniform(-0.05, 0.05)
+            bar['plasma_temp'] = max(0.2, min(1.0, bar['plasma_temp']))
+            
+            # Flow phase for internal movement
+            bar['flow_phase'] += dt * (2 + bar['plasma_temp'])
+            
+            # Peak tracking like spectrum
+            if bar['height'] > bar['peak_height']:
+                bar['peak_height'] = bar['height']
+                bar['peak_decay'] = 0
+            else:
+                bar['peak_decay'] += dt * 15
+                bar['peak_height'] = max(0, bar['peak_height'] - bar['peak_decay'])
+            
+            # Update energy level
+            bar['energy'] = bar['height'] / self.config.height
+        
+        # Spawn energy waves periodically
+        self.wave_spawn_timer += dt
+        if self.wave_spawn_timer > 0.5:
+            self.wave_spawn_timer = 0
+            if random.random() < 0.7:
+                self.energy_waves.append({
+                    'position': 0,
+                    'speed': random.uniform(30, 60),
+                    'amplitude': random.uniform(5, 15),
+                    'decay': 0.95
+                })
+        
+        # Update energy waves
+        for wave in self.energy_waves[:]:
+            wave['position'] += wave['speed'] * dt
+            wave['amplitude'] *= wave['decay']
+            
+            # Apply wave to bars
+            bar_index = int(wave['position'] * self.num_bars / self.config.width)
+            if 0 <= bar_index < self.num_bars:
+                self.bars[bar_index]['velocity'] += wave['amplitude'] * 0.5
+            
+            # Remove dead waves
+            if wave['position'] > self.config.width or wave['amplitude'] < 0.5:
+                self.energy_waves.remove(wave)
+        
+        # Update flow particles
+        for particle in self.flow_particles:
+            # Attract to nearest high-energy bar
+            nearest_bar = min(self.num_bars - 1, max(0, int(particle['x'] * self.num_bars / self.config.width)))
+            bar_center_x = nearest_bar * (self.bar_width + 1) + self.bar_width / 2
+            
+            # Apply attraction force
+            dx = bar_center_x - particle['x']
+            attraction = dx * 0.02 * self.bars[nearest_bar]['energy']
+            particle['vx'] += attraction
+            
+            # Vertical force based on bar energy
+            if particle['y'] > self.config.height - self.bars[nearest_bar]['height']:
+                particle['vy'] -= 2  # Push up
+            else:
+                particle['vy'] += 0.5  # Gravity
+            
+            # Update position
+            particle['x'] += particle['vx'] * dt * 10
+            particle['y'] += particle['vy'] * dt * 10
+            
+            # Apply damping
+            particle['vx'] *= 0.95
+            particle['vy'] *= 0.9
+            
+            # Wrap horizontally, reset vertically
+            if particle['x'] < 0:
+                particle['x'] = self.config.width
+            elif particle['x'] > self.config.width:
+                particle['x'] = 0
+            
+            if particle['y'] > self.config.height:
+                particle['y'] = 0
+                particle['vy'] = random.uniform(1, 3)
+            elif particle['y'] < 0:
+                particle['y'] = self.config.height
+                particle['vy'] = random.uniform(-3, -1)
+            
+            # Energy decay
+            particle['life'] -= dt * 0.1
+            if particle['life'] < 0:
+                particle['life'] = 1.0
+                particle['energy'] = random.uniform(0.5, 1.0)
+        
+        # Update plasma field (background effect)
+        for y in range(len(self.plasma_field)):
+            for x in range(len(self.plasma_field[0])):
+                # Calculate field value based on nearby bars
+                bar_x = x * 4 * self.num_bars / self.config.width
+                if bar_x < self.num_bars:
+                    bar_index = int(bar_x)
+                    influence = self.bars[bar_index]['energy'] * 0.3
+                    noise = math.sin(x * 0.5 + self.phase) * math.cos(y * 0.3 + self.phase * 0.7)
+                    self.plasma_field[y][x] = influence + noise * 0.2
+        
+        return True
+    
+    def render(self, draw: ImageDraw) -> None:
+        # Draw plasma field background (subtle)
+        for y in range(0, len(self.plasma_field), 2):
+            for x in range(0, len(self.plasma_field[0]), 2):
+                if self.plasma_field[y][x] > 0.3:
+                    draw.point((x * 4, y * 4), fill=1)
+        
+        # Draw energy connections between bars
+        for i in range(self.num_bars - 1):
+            if self.bars[i]['energy'] > 0.5 and self.bars[i + 1]['energy'] > 0.5:
+                x1 = i * (self.bar_width + 1) + self.bar_width
+                x2 = (i + 1) * (self.bar_width + 1)
+                y1 = self.config.height - int(self.bars[i]['height'])
+                y2 = self.config.height - int(self.bars[i + 1]['height'])
+                
+                # Draw plasma tendril with sine wave
+                for t in range(0, 10):
+                    tx = x1 + (x2 - x1) * t / 10
+                    offset = math.sin(self.bars[i]['flow_phase'] + t * 0.5) * 2
+                    ty = y1 + (y2 - y1) * t / 10 + offset
+                    if 0 <= ty < self.config.height:
+                        draw.point((int(tx), int(ty)), fill=1)
+        
+        # Draw main bars with plasma effects
+        for i, bar in enumerate(self.bars):
+            x = i * (self.bar_width + 1)
+            height = int(bar['height'])
+            
+            if height > 0:
+                # Draw main bar with plasma flow pattern
+                for y_offset in range(height):
+                    y = self.config.height - 1 - y_offset
+                    
+                    # Create flowing plasma pattern inside bar
+                    flow_pattern = math.sin(y * 0.2 + bar['flow_phase']) * 0.5 + 0.5
+                    if flow_pattern > 0.3 or y_offset < 3 or y_offset > height - 3:
+                        draw.rectangle([x, y, x + self.bar_width - 1, y], fill=1)
+                
+                # Draw peak indicator with glow
+                peak_y = self.config.height - int(bar['peak_height'])
+                if peak_y < self.config.height - 2:
+                    # Main peak line
+                    draw.line([(x, peak_y), (x + self.bar_width - 1, peak_y)], fill=1)
+                    # Glow effect above and below
+                    if bar['peak_decay'] < 5:
+                        if peak_y > 0:
+                            draw.line([(x, peak_y - 1), (x + self.bar_width - 1, peak_y - 1)], fill=1)
+        
+        # Draw flow particles
+        for particle in self.flow_particles:
+            if particle['energy'] > 0.3:
+                x, y = int(particle['x']), int(particle['y'])
+                if 0 <= x < self.config.width and 0 <= y < self.config.height:
+                    draw.point((x, y), fill=1)
+                    # Add glow for high energy particles
+                    if particle['energy'] > 0.7:
+                        if x > 0:
+                            draw.point((x - 1, y), fill=1)
+                        if x < self.config.width - 1:
+                            draw.point((x + 1, y), fill=1)
+        
+        # Draw baseline
+        draw.line([(0, self.config.height - 1), (self.config.width - 1, self.config.height - 1)], fill=1)
+
+
+class QuantumFieldAnimation(BaseAnimation):
+    """Quantum Field - Wave interference patterns with particle physics"""
+    
+    def __init__(self, config: AnimationConfig):
+        super().__init__(config)
+        
+        # Wave sources that create interference patterns
+        self.wave_sources = []
+        for _ in range(3):
+            self.wave_sources.append({
+                'x': random.uniform(20, config.width - 20),
+                'y': random.uniform(20, config.height - 20),
+                'frequency': random.uniform(0.5, 2.0),
+                'amplitude': random.uniform(10, 20),
+                'phase': 0,
+                'vx': random.uniform(-5, 5),
+                'vy': random.uniform(-5, 5),
+                'color_phase': random.uniform(0, math.pi * 2)
+            })
+        
+        # Quantum particles affected by the field
+        self.quantum_particles = []
+        for _ in range(30):
+            self.quantum_particles.append({
+                'x': random.uniform(0, config.width),
+                'y': random.uniform(0, config.height),
+                'vx': 0,
+                'vy': 0,
+                'phase': random.uniform(0, math.pi * 2),
+                'entangled_with': None,
+                'probability': 1.0,
+                'spin': random.choice([-1, 1])
+            })
+        
+        # Field grid for efficient calculation
+        self.field_resolution = 8
+        self.field_width = config.width // self.field_resolution
+        self.field_height = config.height // self.field_resolution
+        self.field = [[0 for _ in range(self.field_width)] 
+                      for _ in range(self.field_height)]
+        
+        # Entanglement pairs
+        self.entanglement_lines = []
+        
+        # Quantum tunneling events
+        self.tunnel_events = []
+        
+        # Wave collapse visualization
+        self.collapse_points = []
+        
+    def calculate_field_at_point(self, x: float, y: float, t: float) -> float:
+        """Calculate wave interference at a specific point"""
+        total = 0
+        for source in self.wave_sources:
+            dx = x - source['x']
+            dy = y - source['y']
+            distance = math.sqrt(dx * dx + dy * dy)
+            
+            if distance > 0:
+                # Wave equation with decay
+                wave_value = source['amplitude'] * math.sin(
+                    source['frequency'] * (distance * 0.1 - t) + source['phase']
+                ) / (1 + distance * 0.01)
+                total += wave_value
+        
+        return total
+    
+    def update(self, dt: float) -> bool:
+        if not super().update(dt):
+            return False
+        
+        # Update wave sources
+        for source in self.wave_sources:
+            # Move sources slowly
+            source['x'] += source['vx'] * dt
+            source['y'] += source['vy'] * dt
+            
+            # Bounce off walls
+            if source['x'] < 10 or source['x'] > self.config.width - 10:
+                source['vx'] *= -1
+                source['x'] = max(10, min(self.config.width - 10, source['x']))
+            if source['y'] < 10 or source['y'] > self.config.height - 10:
+                source['vy'] *= -1
+                source['y'] = max(10, min(self.config.height - 10, source['y']))
+            
+            # Update phase
+            source['phase'] += dt * 2
+            source['color_phase'] += dt * 0.5
+        
+        # Calculate field grid
+        for y in range(self.field_height):
+            for x in range(self.field_width):
+                px = x * self.field_resolution
+                py = y * self.field_resolution
+                self.field[y][x] = self.calculate_field_at_point(px, py, self.phase)
+        
+        # Update quantum particles
+        self.entanglement_lines.clear()
+        
+        for i, particle in enumerate(self.quantum_particles):
+            # Get field value at particle position
+            grid_x = int(particle['x'] / self.field_resolution)
+            grid_y = int(particle['y'] / self.field_resolution)
+            
+            if 0 <= grid_x < self.field_width and 0 <= grid_y < self.field_height:
+                field_value = self.field[grid_y][grid_x]
+                
+                # Field affects particle velocity
+                gradient_x = 0
+                gradient_y = 0
+                
+                if grid_x > 0:
+                    gradient_x = self.field[grid_y][grid_x] - self.field[grid_y][grid_x - 1]
+                if grid_y > 0:
+                    gradient_y = self.field[grid_y][grid_x] - self.field[grid_y - 1][grid_x]
+                
+                # Apply quantum forces
+                particle['vx'] += gradient_x * particle['spin'] * 0.5
+                particle['vy'] += gradient_y * particle['spin'] * 0.5
+                
+                # Damping
+                particle['vx'] *= 0.95
+                particle['vy'] *= 0.95
+            
+            # Update position
+            particle['x'] += particle['vx'] * dt * 10
+            particle['y'] += particle['vy'] * dt * 10
+            
+            # Quantum tunneling at boundaries
+            if particle['x'] < 0 or particle['x'] > self.config.width:
+                if random.random() < 0.3:  # Tunnel probability
+                    # Quantum tunnel to opposite side
+                    self.tunnel_events.append({
+                        'start_x': particle['x'],
+                        'start_y': particle['y'],
+                        'end_x': self.config.width - particle['x'],
+                        'end_y': particle['y'],
+                        'time': 0
+                    })
+                    particle['x'] = self.config.width - particle['x']
+                else:
+                    # Normal bounce
+                    particle['vx'] *= -1
+                    particle['x'] = max(0, min(self.config.width, particle['x']))
+            
+            if particle['y'] < 0 or particle['y'] > self.config.height:
+                particle['vy'] *= -1
+                particle['y'] = max(0, min(self.config.height, particle['y']))
+            
+            # Update phase
+            particle['phase'] += dt * 3
+            
+            # Probability wave function
+            particle['probability'] = abs(math.sin(particle['phase'])) * 0.5 + 0.5
+            
+            # Create entanglement with nearby particles
+            if particle['entangled_with'] is None and random.random() < 0.01:
+                for j, other in enumerate(self.quantum_particles):
+                    if i != j and other['entangled_with'] is None:
+                        dx = particle['x'] - other['x']
+                        dy = particle['y'] - other['y']
+                        distance = math.sqrt(dx * dx + dy * dy)
+                        
+                        if distance < 30:
+                            particle['entangled_with'] = j
+                            other['entangled_with'] = i
+                            break
+            
+            # Draw entanglement lines
+            if particle['entangled_with'] is not None:
+                if particle['entangled_with'] < len(self.quantum_particles):
+                    other = self.quantum_particles[particle['entangled_with']]
+                    self.entanglement_lines.append((
+                        particle['x'], particle['y'],
+                        other['x'], other['y'],
+                        particle['probability']
+                    ))
+                    
+                    # Occasionally break entanglement
+                    if random.random() < 0.005:
+                        other['entangled_with'] = None
+                        particle['entangled_with'] = None
+                        
+                        # Wave function collapse effect
+                        self.collapse_points.append({
+                            'x': (particle['x'] + other['x']) / 2,
+                            'y': (particle['y'] + other['y']) / 2,
+                            'radius': 0,
+                            'max_radius': 20
+                        })
+        
+        # Update tunnel events
+        for event in self.tunnel_events[:]:
+            event['time'] += dt * 5
+            if event['time'] > 1:
+                self.tunnel_events.remove(event)
+        
+        # Update collapse points
+        for point in self.collapse_points[:]:
+            point['radius'] += dt * 40
+            if point['radius'] > point['max_radius']:
+                self.collapse_points.remove(point)
+        
+        return True
+    
+    def render(self, draw: ImageDraw) -> None:
+        # Draw interference pattern field
+        for y in range(0, self.field_height, 2):
+            for x in range(0, self.field_width, 2):
+                value = self.field[y][x]
+                
+                # Create interference pattern visualization
+                if abs(value) > 5:
+                    px = x * self.field_resolution
+                    py = y * self.field_resolution
+                    
+                    # Positive and negative interference
+                    if value > 5:
+                        draw.rectangle([px, py, px + self.field_resolution - 1, py], fill=1)
+                    elif value < -5 and abs(value) > 10:
+                        draw.point((px, py), fill=1)
+                        draw.point((px + self.field_resolution - 1, py), fill=1)
+        
+        # Draw entanglement lines
+        for x1, y1, x2, y2, probability in self.entanglement_lines:
+            if probability > 0.5:
+                # Draw dotted line for entanglement
+                steps = 10
+                for i in range(0, steps, 2):
+                    t = i / steps
+                    x = x1 + (x2 - x1) * t
+                    y = y1 + (y2 - y1) * t
+                    draw.point((int(x), int(y)), fill=1)
+        
+        # Draw quantum tunneling effects
+        for event in self.tunnel_events:
+            # Draw tunnel path
+            t = event['time']
+            if t < 1:
+                for i in range(5):
+                    x = event['start_x'] + (event['end_x'] - event['start_x']) * t
+                    y = event['start_y'] + random.uniform(-2, 2)
+                    if 0 <= x < self.config.width and 0 <= y < self.config.height:
+                        draw.point((int(x), int(y)), fill=1)
+        
+        # Draw wave collapse effects
+        for point in self.collapse_points:
+            radius = int(point['radius'])
+            if radius > 0:
+                # Draw expanding circle
+                for angle in range(0, 360, 30):
+                    x = point['x'] + radius * math.cos(math.radians(angle))
+                    y = point['y'] + radius * math.sin(math.radians(angle))
+                    if 0 <= x < self.config.width and 0 <= y < self.config.height:
+                        draw.point((int(x), int(y)), fill=1)
+        
+        # Draw quantum particles
+        for particle in self.quantum_particles:
+            if particle['probability'] > 0.3:
+                x, y = int(particle['x']), int(particle['y'])
+                
+                if 0 <= x < self.config.width and 0 <= y < self.config.height:
+                    # Draw particle with spin indicator
+                    draw.point((x, y), fill=1)
+                    
+                    # Spin visualization
+                    if particle['spin'] > 0:
+                        # Spin up - draw small vertical line above
+                        if y > 1:
+                            draw.point((x, y - 1), fill=1)
+                    else:
+                        # Spin down - draw small vertical line below
+                        if y < self.config.height - 2:
+                            draw.point((x, y + 1), fill=1)
+                    
+                    # High probability particles get bigger representation
+                    if particle['probability'] > 0.8:
+                        if x > 0:
+                            draw.point((x - 1, y), fill=1)
+                        if x < self.config.width - 1:
+                            draw.point((x + 1, y), fill=1)
+        
+        # Draw wave sources as pulsing circles
+        for source in self.wave_sources:
+            x, y = int(source['x']), int(source['y'])
+            
+            # Pulsing radius based on phase
+            radius = 3 + int(math.sin(source['color_phase']) * 2)
+            
+            # Draw circle
+            for angle in range(0, 360, 45):
+                px = x + radius * math.cos(math.radians(angle))
+                py = y + radius * math.sin(math.radians(angle))
+                if 0 <= px < self.config.width and 0 <= py < self.config.height:
+                    draw.point((int(px), int(py)), fill=1)
+
+
 class OLEDController:
     """Main controller for OLED animations"""
     
@@ -1924,7 +2463,9 @@ class OLEDController:
             AnimationType.SPIRAL: SpiralAnimation,
             AnimationType.GLITCH: GlitchAnimation,
             AnimationType.HORIZON: HorizonAnimation,
-            AnimationType.THERMAL: ThermalColumnsAnimation
+            AnimationType.THERMAL: ThermalColumnsAnimation,
+            AnimationType.PLASMAFLOW: PlasmaFlowAnimation,
+            AnimationType.QUANTUMFIELD: QuantumFieldAnimation
         }
         self.running = False
         # Preview-related attributes
@@ -2309,7 +2850,9 @@ def main():
                 AnimationType.SPECTRUM,
                 AnimationType.NEURAL,
                 AnimationType.STARFIELD,
-                AnimationType.MATRIX
+                AnimationType.MATRIX,
+                AnimationType.PLASMAFLOW,
+                AnimationType.QUANTUMFIELD
             ]
             controller.run_cycle(pro_animations, args.cycle_time)  # Now defaults to 45 seconds
     finally:

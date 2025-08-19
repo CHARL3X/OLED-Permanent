@@ -20,7 +20,9 @@ animations = [
     "spiral",
     "spectrum",
     "neural",
-    "horizon"
+    "horizon",
+    "plasmaflow",
+    "quantumfield"
 ]
 
 print("Testing all animations (3 seconds each)...")
