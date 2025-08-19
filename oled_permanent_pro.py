@@ -10,6 +10,7 @@ import random
 import argparse
 import signal
 import sys
+import threading
 from typing import Optional, List, Tuple, Dict, Any
 from dataclasses import dataclass
 from enum import Enum
@@ -908,6 +909,360 @@ class ProfessionalMatrixAnimation(BaseAnimation):
                             draw.point((x, y), fill=1)
 
 
+class CylonAnimation(BaseAnimation):
+    """Knight Rider / Battlestar Galactica scanner"""
+    
+    def __init__(self, config: AnimationConfig):
+        super().__init__(config)
+        self.position = 0
+        self.direction = 1
+        self.trail_length = 5
+        self.speed = 3
+        
+    def update(self, dt: float) -> bool:
+        if not super().update(dt):
+            return False
+            
+        self.position += self.direction * self.speed
+        
+        if self.position >= self.config.width - 1:
+            self.position = self.config.width - 1
+            self.direction = -1
+        elif self.position <= 0:
+            self.position = 0
+            self.direction = 1
+            
+        return True
+    
+    def render(self, draw: ImageDraw) -> None:
+        y_center = self.config.height // 2
+        
+        # Draw trail
+        for i in range(self.trail_length):
+            trail_pos = self.position - (i * self.direction * 3)
+            if 0 <= trail_pos < self.config.width:
+                size = max(1, 3 - i)
+                
+                if i < 3:  # Only draw first few trail elements
+                    draw.rectangle([
+                        trail_pos - size, y_center - size,
+                        trail_pos + size, y_center + size
+                    ], fill=1)
+        
+        # Draw scanning lines
+        for y_offset in [-10, 0, 10]:
+            y = y_center + y_offset
+            if y_offset == 0:  # Only draw center line
+                draw.line([(0, y), (self.config.width, y)], fill=1)
+
+
+class BreathAnimation(BaseAnimation):
+    """Calming breathing animation with particles"""
+    
+    def __init__(self, config: AnimationConfig):
+        super().__init__(config)
+        self.particles = []
+        
+        # Initialize particles
+        for _ in range(15):
+            self.particles.append({
+                'x': random.uniform(0, config.width),
+                'y': random.uniform(0, config.height),
+                'speed': random.uniform(0.1, 0.3),
+                'size': random.choice([1, 2])
+            })
+    
+    def update(self, dt: float) -> bool:
+        if not super().update(dt):
+            return False
+            
+        # Update particles
+        for particle in self.particles:
+            particle['x'] -= particle['speed']
+            if particle['x'] < 0:
+                particle['x'] = self.config.width
+                particle['y'] = random.uniform(0, self.config.height)
+                
+        return True
+    
+    def render(self, draw: ImageDraw) -> None:
+        # Calculate breathing cycle
+        breath_cycle = (math.sin(self.phase * 0.5) + 1) / 2
+        
+        # Draw main breathing rectangle
+        center_x = self.config.width // 2
+        center_y = self.config.height // 2
+        
+        width = 20 + breath_cycle * 20
+        height = 10 + breath_cycle * 10
+        
+        draw.rectangle([
+            center_x - width, center_y - height,
+            center_x + width, center_y + height
+        ], outline=1)
+        
+        # Draw inner rectangle
+        inner_width = 20 + (1 - breath_cycle) * 15
+        inner_height = 10 + (1 - breath_cycle) * 7
+        
+        draw.rectangle([
+            center_x - inner_width, center_y - inner_height,
+            center_x + inner_width, center_y + inner_height
+        ], outline=1)
+        
+        # Draw particles
+        for particle in self.particles:
+            draw.point((int(particle['x']), int(particle['y'])), fill=1)
+
+
+class GeometricAnimation(BaseAnimation):
+    """Mathematical geometric patterns"""
+    
+    def __init__(self, config: AnimationConfig):
+        super().__init__(config)
+        self.pattern_type = 0
+        self.pattern_phase = 0
+        
+    def update(self, dt: float) -> bool:
+        if not super().update(dt):
+            return False
+            
+        self.pattern_phase += dt
+        
+        # Switch patterns every 5 seconds
+        if int(self.phase) % 5 == 0 and int(self.phase) != int(self.phase - dt):
+            self.pattern_type = (self.pattern_type + 1) % 3
+            
+        return True
+    
+    def render(self, draw: ImageDraw) -> None:
+        center_x = self.config.width // 2
+        center_y = self.config.height // 2
+        
+        if self.pattern_type == 0:  # Lissajous
+            points = []
+            for i in range(100):
+                t = i * 0.1 + self.pattern_phase
+                x = center_x + 30 * math.sin(3 * t)
+                y = center_y + 25 * math.sin(2 * t + math.pi/4)
+                points.append((x, y))
+            
+            if len(points) > 1:
+                draw.line(points, fill=1, width=1)
+                
+        elif self.pattern_type == 1:  # Spiral
+            points = []
+            for i in range(50):
+                r = i * 0.8
+                angle = i * 0.3 + self.pattern_phase
+                x = center_x + r * math.cos(angle)
+                y = center_y + r * math.sin(angle)
+                points.append((x, y))
+            
+            if len(points) > 1:
+                draw.line(points, fill=1, width=1)
+                
+        else:  # Rotating shapes
+            for i in range(3):
+                angle = self.pattern_phase + i * 2 * math.pi / 3
+                x = center_x + 25 * math.cos(angle)
+                y = center_y + 25 * math.sin(angle)
+                
+                size = 5 + 3 * math.sin(self.pattern_phase * 2 + i)
+                draw.rectangle([
+                    x - size, y - size,
+                    x + size, y + size
+                ], outline=1)
+
+
+class ParticleAnimation(BaseAnimation):
+    """Particle system with physics"""
+    
+    def __init__(self, config: AnimationConfig):
+        super().__init__(config)
+        self.particles = []
+        self.gravity = 0.1
+        
+    def update(self, dt: float) -> bool:
+        if not super().update(dt):
+            return False
+            
+        # Spawn new particles
+        if random.random() < 0.3:
+            self.particles.append({
+                'x': self.config.width // 2 + random.gauss(0, 10),
+                'y': self.config.height - 10,
+                'vx': random.gauss(0, 2),
+                'vy': random.uniform(-5, -2),
+                'life': 1.0
+            })
+        
+        # Update particles
+        for particle in self.particles[:]:
+            particle['x'] += particle['vx']
+            particle['y'] += particle['vy']
+            particle['vy'] += self.gravity
+            particle['life'] -= 0.02
+            
+            if particle['life'] <= 0 or particle['y'] > self.config.height:
+                self.particles.remove(particle)
+        
+        # Limit particle count
+        if len(self.particles) > 50:
+            self.particles = self.particles[-50:]
+        
+        return True
+    
+    def render(self, draw: ImageDraw) -> None:
+        for particle in self.particles:
+            if particle['life'] > 0.3:
+                size = 1 if particle['life'] < 0.5 else 2
+                
+                if size == 1:
+                    draw.point((int(particle['x']), int(particle['y'])), fill=1)
+                else:
+                    draw.rectangle([
+                        int(particle['x']), int(particle['y']),
+                        int(particle['x']) + 1, int(particle['y']) + 1
+                    ], fill=1)
+
+
+class WaveAnimation(BaseAnimation):
+    """Multiple overlapping wave patterns"""
+    
+    def __init__(self, config: AnimationConfig):
+        super().__init__(config)
+        self.waves = [
+            {'freq': 2, 'amp': 10, 'phase': 0, 'speed': 1},
+            {'freq': 3, 'amp': 8, 'phase': math.pi/3, 'speed': 1.5},
+            {'freq': 1.5, 'amp': 6, 'phase': math.pi/2, 'speed': 0.8}
+        ]
+    
+    def update(self, dt: float) -> bool:
+        if not super().update(dt):
+            return False
+            
+        for wave in self.waves:
+            wave['phase'] += dt * wave['speed']
+        
+        return True
+    
+    def render(self, draw: ImageDraw) -> None:
+        center_y = self.config.height // 2
+        
+        for wave in self.waves:
+            points = []
+            for x in range(self.config.width):
+                t = (x / self.config.width) * 2 * math.pi * wave['freq']
+                y = center_y + wave['amp'] * math.sin(t + wave['phase'])
+                points.append((x, y))
+            
+            if len(points) > 1:
+                draw.line(points, fill=1, width=1)
+
+
+class SpiralAnimation(BaseAnimation):
+    """Animated spiral patterns"""
+    
+    def __init__(self, config: AnimationConfig):
+        super().__init__(config)
+        self.spiral_count = 3
+        
+    def update(self, dt: float) -> bool:
+        if not super().update(dt):
+            return False
+        return True
+    
+    def render(self, draw: ImageDraw) -> None:
+        center_x = self.config.width // 2
+        center_y = self.config.height // 2
+        
+        for spiral in range(self.spiral_count):
+            points = []
+            phase_offset = spiral * 2 * math.pi / self.spiral_count
+            
+            for i in range(50):
+                t = i * 0.15
+                r = t * 5
+                angle = t + self.phase + phase_offset
+                
+                x = center_x + r * math.cos(angle)
+                y = center_y + r * math.sin(angle)
+                
+                if 0 <= x < self.config.width and 0 <= y < self.config.height:
+                    points.append((x, y))
+            
+            if len(points) > 1:
+                draw.line(points, fill=1, width=1)
+
+
+class GlitchAnimation(BaseAnimation):
+    """Digital glitch effect animation"""
+    
+    def __init__(self, config: AnimationConfig):
+        super().__init__(config)
+        self.glitch_zones = []
+        self.static_lines = []
+        self.glitch_intensity = 0
+        
+    def update(self, dt: float) -> bool:
+        if not super().update(dt):
+            return False
+            
+        # Random glitch intensity changes
+        if random.random() < 0.1:
+            self.glitch_intensity = random.uniform(0, 1)
+        else:
+            self.glitch_intensity *= 0.95
+        
+        # Update glitch zones
+        if random.random() < self.glitch_intensity:
+            self.glitch_zones = []
+            for _ in range(random.randint(1, 5)):
+                self.glitch_zones.append({
+                    'x': random.randint(0, self.config.width - 20),
+                    'y': random.randint(0, self.config.height - 10),
+                    'w': random.randint(10, 30),
+                    'h': random.randint(5, 15),
+                    'offset': random.randint(-10, 10)
+                })
+        
+        # Update static lines
+        self.static_lines = []
+        for _ in range(int(10 * self.glitch_intensity)):
+            self.static_lines.append(random.randint(0, self.config.height - 1))
+        
+        return True
+    
+    def render(self, draw: ImageDraw) -> None:
+        # Draw base pattern (grid)
+        for x in range(0, self.config.width, 8):
+            draw.line([(x, 0), (x, self.config.height)], fill=1)
+        for y in range(0, self.config.height, 8):
+            draw.line([(0, y), (self.config.width, y)], fill=1)
+        
+        # Draw glitch zones
+        for zone in self.glitch_zones:
+            # Draw displaced rectangle
+            for y in range(zone['y'], min(zone['y'] + zone['h'], self.config.height)):
+                x_start = zone['x'] + zone['offset']
+                x_end = min(x_start + zone['w'], self.config.width)
+                if x_start >= 0 and x_end > x_start:
+                    draw.line([(x_start, y), (x_end, y)], fill=1)
+        
+        # Draw static lines
+        for y in self.static_lines:
+            for x in range(0, self.config.width, 2):
+                if random.random() < 0.5:
+                    draw.point((x, y), fill=1)
+        
+        # Random noise
+        for _ in range(int(100 * self.glitch_intensity)):
+            x = random.randint(0, self.config.width - 1)
+            y = random.randint(0, self.config.height - 1)
+            draw.point((x, y), fill=1)
+
+
 class OLEDController:
     """Main controller for OLED animations"""
     
@@ -922,9 +1277,19 @@ class OLEDController:
             AnimationType.NEURAL: NeuralNetworkAnimation,
             AnimationType.STARFIELD: EnhancedStarfieldAnimation,
             AnimationType.MATRIX: ProfessionalMatrixAnimation,
-            # Can add more animations here
+            AnimationType.CYLON: CylonAnimation,
+            AnimationType.BREATH: BreathAnimation,
+            AnimationType.GEOMETRIC: GeometricAnimation,
+            AnimationType.PARTICLES: ParticleAnimation,
+            AnimationType.WAVES: WaveAnimation,
+            AnimationType.SPIRAL: SpiralAnimation,
+            AnimationType.GLITCH: GlitchAnimation
         }
         self.running = False
+        # Preview-related attributes
+        self.preview_thread = None
+        self.preview_running = False
+        self.preview_lock = threading.Lock()
         
     def initialize(self):
         """Initialize the OLED display"""
@@ -1054,33 +1419,158 @@ class OLEDController:
         print("-" * 30)
         return implemented
     
+    def start_preview(self, animation_type: AnimationType):
+        """Start previewing an animation in the background"""
+        with self.preview_lock:
+            # Stop any existing preview
+            if self.preview_thread and self.preview_thread.is_alive():
+                self.preview_running = False
+                self.preview_thread.join(timeout=1.0)
+            
+            # Start new preview
+            self.preview_running = True
+            self.preview_thread = threading.Thread(
+                target=self.preview_loop,
+                args=(animation_type,),
+                daemon=True
+            )
+            self.preview_thread.start()
+    
+    def stop_preview(self):
+        """Stop the current preview"""
+        with self.preview_lock:
+            if self.preview_running:
+                self.preview_running = False
+                if self.preview_thread and self.preview_thread.is_alive():
+                    self.preview_thread.join(timeout=1.0)
+            
+            # Clear the display
+            if self.device:
+                try:
+                    self.device.clear()
+                except:
+                    pass  # Ignore errors during cleanup
+    
+    def preview_loop(self, animation_type: AnimationType):
+        """Run animation preview in background thread"""
+        try:
+            # Set up animation
+            if animation_type not in self.animations:
+                return
+            
+            animation_class = self.animations[animation_type]
+            preview_animation = animation_class(self.config)
+            
+            # Use lower FPS for preview (smoother transitions)
+            frame_time = 1.0 / 15  # 15 FPS for preview
+            last_frame = time.time()
+            
+            while self.preview_running:
+                current_time = time.time()
+                dt = current_time - last_frame
+                
+                if dt >= frame_time:
+                    # Update animation
+                    if not preview_animation.update(dt):
+                        # Animation finished, restart it
+                        preview_animation = animation_class(self.config)
+                    
+                    # Render frame
+                    image = Image.new('1', (self.config.width, self.config.height), 0)
+                    draw = ImageDraw.Draw(image)
+                    preview_animation.render(draw)
+                    
+                    # Display frame
+                    if self.device and self.preview_running:
+                        try:
+                            self.device.display(image)
+                        except:
+                            break  # Exit on display error
+                    
+                    last_frame = current_time
+                else:
+                    time.sleep(0.001)
+        except:
+            pass  # Silently handle any errors in preview thread
+    
     def interactive_select(self):
-        """Interactive animation selection"""
+        """Interactive animation selection with arrow key navigation"""
+        import termios
+        import tty
+        
         implemented = self.list_animations()
         
         if not implemented:
             print("No animations available!")
             return None
         
-        print("\nSelect an animation:")
-        for i, anim in enumerate(implemented, 1):
-            print(f"{i}) {anim.value}")
-        print("0) Cancel")
+        # Save terminal settings
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
         
-        while True:
-            try:
-                choice = input("\nEnter number: ").strip()
-                if choice == "0":
+        try:
+            # Enable raw mode for arrow key detection
+            tty.setraw(sys.stdin.fileno())
+            
+            current_index = 0
+            
+            # Start preview of first animation
+            self.start_preview(implemented[current_index])
+            
+            # Clear and show menu
+            print("\r\033[2J\033[H", end='')  # Clear screen
+            print("OLED Animation Selector")
+            print("═" * 30)
+            print("Use ↑/↓ arrows to navigate, Enter to select, ESC to cancel")
+            print("Live preview showing on OLED display\n")
+            
+            while True:
+                # Display menu with current selection highlighted
+                for i, anim in enumerate(implemented):
+                    if i == current_index:
+                        print(f"\r\033[K→ {anim.value:<20} [PREVIEWING]", end='')
+                    else:
+                        print(f"\r\033[K  {anim.value:<20}", end='')
+                    if i < len(implemented) - 1:
+                        print()  # New line for all but last item
+                
+                # Read key press
+                key = sys.stdin.read(1)
+                
+                if key == '\x1b':  # ESC sequence
+                    next_key = sys.stdin.read(2)
+                    if next_key == '[A':  # Up arrow
+                        current_index = (current_index - 1) % len(implemented)
+                        # Start preview of newly selected animation
+                        self.start_preview(implemented[current_index])
+                        # Move cursor up to redraw menu
+                        print(f"\r\033[{len(implemented)}A", end='')
+                    elif next_key == '[B':  # Down arrow
+                        current_index = (current_index + 1) % len(implemented)
+                        # Start preview of newly selected animation
+                        self.start_preview(implemented[current_index])
+                        # Move cursor up to redraw menu
+                        print(f"\r\033[{len(implemented)}A", end='')
+                    elif next_key == '':  # Just ESC pressed
+                        print("\n\nCancelled.")
+                        return None
+                elif key == '\r' or key == '\n':  # Enter key
+                    selected = implemented[current_index]
+                    print(f"\n\nSelected: {selected.value}")
+                    return selected
+                elif key == '\x03':  # Ctrl+C
+                    print("\n\nCancelled.")
                     return None
-                idx = int(choice) - 1
-                if 0 <= idx < len(implemented):
-                    return implemented[idx]
-                else:
-                    print("Invalid selection, try again.")
-            except (ValueError, EOFError):
-                print("Invalid input, try again.")
-            except KeyboardInterrupt:
-                return None
+                elif key == 'q' or key == 'Q':  # Q to quit
+                    print("\n\nCancelled.")
+                    return None
+                
+        finally:
+            # Stop preview before restoring terminal
+            self.stop_preview()
+            # Restore terminal settings
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            print()  # Final newline for clean output
     
     def stop(self):
         """Stop animations and clear display"""
@@ -1152,11 +1642,9 @@ def main():
             # Interactive selection mode
             selected = controller.interactive_select()
             if selected:
-                if args.loop:
-                    # Loop forever
-                    while True:
-                        controller.run_single(selected)
-                else:
+                # Always loop when selected from interactive menu
+                print(f"Looping {selected.value} animation (Press Ctrl+C to stop)")
+                while True:
                     controller.run_single(selected)
         elif args.cycle:
             # Cycle through all animations
