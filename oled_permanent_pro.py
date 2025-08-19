@@ -1232,8 +1232,14 @@ class HorizonAnimation(BaseAnimation):
                 if abs(offset) > 1:
                     draw.point((int(x + offset), y), fill=1)
         
-        # === THERMAL MIXING (no boundary line) ===
-        # Just show steam particles at transition zone
+        # === THERMAL BOUNDARY (Row 16) ===
+        # Draw dynamic boundary with thermal mixing
+        for x in range(self.config.width):
+            # Wavy boundary showing thermal interaction
+            wave_offset = math.sin(x * 0.1 + self.thermal_waves[0]['phase']) * 1
+            boundary_y = self.color_boundary + int(wave_offset)
+            if 0 <= boundary_y < self.config.height:
+                draw.point((x, boundary_y), fill=1)
         
         # Draw steam particles at boundary
         for steam in self.steam_particles:
