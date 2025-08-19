@@ -1520,26 +1520,22 @@ class BreathAnimation(BaseAnimation):
 
 
 class GeometricAnimation(BaseAnimation):
-    """Minimalist geometric patterns for color zones"""
+    """Wave patterns for color zones"""
     
     def __init__(self, config: AnimationConfig):
         super().__init__(config)
-        self.pattern_type = 0
         self.pattern_phase = 0
         
         # Color boundary
         self.boundary = 16
         
-        # Grid points for dot matrix patterns
+        # Grid for zigzag pattern in orange zone
         self.grid_cols = 8
         self.grid_spacing = config.width // self.grid_cols
         
-        # Rotating bars
-        self.bar_angles = [0, math.pi/4, math.pi/2, 3*math.pi/4]
-        
-        # Pulse effect
-        self.pulse_radius = 0
-        self.pulse_expanding = True
+        # Wave parameters for blue zone
+        self.wave_amplitude = 10
+        self.wave_layers = 3
         
     def update(self, dt: float) -> bool:
         if not super().update(dt):
@@ -1547,109 +1543,40 @@ class GeometricAnimation(BaseAnimation):
             
         self.pattern_phase += dt
         
-        # Switch patterns every 4 seconds
-        if int(self.phase) % 4 == 0 and int(self.phase) != int(self.phase - dt):
-            self.pattern_type = (self.pattern_type + 1) % 4
-            self.pulse_radius = 0  # Reset pulse
-            
-        # Update pulse effect
-        if self.pulse_expanding:
-            self.pulse_radius += dt * 30
-            if self.pulse_radius > self.config.width:
-                self.pulse_expanding = False
-        else:
-            self.pulse_radius -= dt * 30
-            if self.pulse_radius < 0:
-                self.pulse_radius = 0
-                self.pulse_expanding = True
-        
-        # Update rotating bars
-        for i in range(len(self.bar_angles)):
-            self.bar_angles[i] += dt * (0.5 + i * 0.2)
+        # Slowly vary the amplitude for organic movement
+        self.wave_amplitude = 10 + math.sin(self.pattern_phase * 0.3) * 3
         
         return True
     
     def render(self, draw: ImageDraw) -> None:
-        if self.pattern_type == 0:  # Grid Pulse
-            # Orange zone - expanding pulse
-            for x in range(0, self.config.width, self.grid_spacing):
-                for y in range(0, self.boundary, 4):
-                    dist = abs(x - self.config.width // 2) + abs(y - 8)
-                    if abs(dist - self.pulse_radius) < 3:
-                        draw.rectangle([x, y, x+2, y+2], fill=1)
-            
-            # Blue zone - contracting pulse  
-            for x in range(0, self.config.width, self.grid_spacing):
-                for y in range(self.boundary + 4, self.config.height, 6):
-                    dist = abs(x - self.config.width // 2) + abs(y - 72)
-                    if abs(dist - (self.config.width - self.pulse_radius)) < 3:
-                        draw.rectangle([x, y, x+2, y+2], fill=1)
-                        
-        elif self.pattern_type == 1:  # Rotating Bars
-            center_x = self.config.width // 2
-            
-            # Orange zone - thin rotating lines
-            for i, angle in enumerate(self.bar_angles[:2]):
-                length = 7
-                x1 = center_x + math.cos(angle) * length
-                y1 = 8 + math.sin(angle) * length * 0.5
-                x2 = center_x - math.cos(angle) * length  
-                y2 = 8 - math.sin(angle) * length * 0.5
-                
-                if y1 < self.boundary and y2 < self.boundary:
-                    draw.line([(x1, y1), (x2, y2)], fill=1)
-            
-            # Blue zone - thick rotating bars
-            for i, angle in enumerate(self.bar_angles[2:]):
-                for offset in range(-20, 21, 8):
-                    y_center = 72 + offset
-                    length = 15
-                    x1 = center_x + math.cos(angle) * length
-                    y1 = y_center + math.sin(angle) * length
-                    x2 = center_x - math.cos(angle) * length
-                    y2 = y_center - math.sin(angle) * length
-                    
-                    if self.boundary < min(y1, y2) and max(y1, y2) < self.config.height:
-                        draw.line([(x1, y1), (x2, y2)], fill=1, width=2)
-                        
-        elif self.pattern_type == 2:  # Zigzag
-            # Orange zone - tight zigzag
-            for row in range(2, self.boundary - 2, 3):
-                for col in range(self.grid_cols):
-                    x = col * self.grid_spacing + (row % 2) * (self.grid_spacing // 2)
-                    x = int(x + math.sin(self.pattern_phase * 2) * 3)
-                    if 0 <= x < self.config.width:
-                        draw.point((x, row), fill=1)
-                        draw.point((x+1, row), fill=1)
-            
-            # Blue zone - wave zigzag
-            amplitude = 10
-            for row in range(self.boundary + 4, self.config.height - 4, 5):
-                for x in range(self.config.width):
-                    wave_offset = math.sin(x * 0.2 + self.pattern_phase) * amplitude
-                    y = row + int(wave_offset)
-                    if self.boundary < y < self.config.height:
-                        draw.point((x, y), fill=1)
-                        
-        else:  # Checkerboard fade
-            # Orange zone - small checks
-            phase = int(self.pattern_phase * 2) % 2
-            for x in range(0, self.config.width, 4):
-                for y in range(0, self.boundary, 4):
-                    if ((x // 4) + (y // 4) + phase) % 2 == 0:
-                        draw.rectangle([x, y, x+3, y+3], fill=1)
-            
-            # Blue zone - large checks with fade
-            for x in range(0, self.config.width, 8):
-                for y in range(self.boundary, self.config.height, 8):
-                    if ((x // 8) + (y // 8) + phase) % 2 == 0:
-                        # Fade based on distance from boundary
-                        dist_from_boundary = y - self.boundary
-                        fade = 1.0 - (dist_from_boundary / (self.config.height - self.boundary))
-                        if random.random() < fade:
-                            draw.rectangle([x, y, x+7, y+7], fill=1)
+        # === ORANGE ZONE - Tight zigzag pattern ===
+        for row in range(2, self.boundary - 2, 3):
+            for col in range(self.grid_cols):
+                x = col * self.grid_spacing + (row % 2) * (self.grid_spacing // 2)
+                x = int(x + math.sin(self.pattern_phase * 2) * 3)
+                if 0 <= x < self.config.width:
+                    draw.point((x, row), fill=1)
+                    draw.point((x+1, row), fill=1)
         
-        # No boundary line
+        # === BLUE ZONE - Beautiful flowing waves ===
+        # Multiple wave layers with different frequencies
+        for layer in range(self.wave_layers):
+            # Each layer has different spacing and phase
+            row_spacing = 4 + layer * 2
+            phase_offset = layer * math.pi / 3
+            amplitude = self.wave_amplitude * (1 - layer * 0.2)  # Decreasing amplitude
+            
+            for row in range(self.boundary + 4 + layer * 2, self.config.height - 4, row_spacing):
+                for x in range(self.config.width):
+                    # Different frequency for each layer
+                    frequency = 0.2 - layer * 0.05
+                    wave_offset = math.sin(x * frequency + self.pattern_phase + phase_offset) * amplitude
+                    y = row + int(wave_offset)
+                    
+                    if self.boundary < y < self.config.height:
+                        # Vary point density for depth effect
+                        if layer == 0 or (layer == 1 and x % 2 == 0) or (layer == 2 and x % 3 == 0):
+                            draw.point((x, y), fill=1)
 
 
 class ParticleAnimation(BaseAnimation):
