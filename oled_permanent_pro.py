@@ -1520,7 +1520,7 @@ class BreathAnimation(BaseAnimation):
 
 
 class GeometricAnimation(BaseAnimation):
-    """Complex wave interference patterns with independent scrolling"""
+    """Ocean-like waves with thermal-style physics"""
     
     def __init__(self, config: AnimationConfig):
         super().__init__(config)
@@ -1531,20 +1531,21 @@ class GeometricAnimation(BaseAnimation):
         # Orange zone (scrolls right)
         self.orange_scroll = 0
         
-        # Blue zone waves (scroll right)
+        # Global phase (like thermal columns)
+        self.global_phase = 0
+        
+        # Blue zone waves with spectrum analyzer physics
         self.wave_phases = []
-        for i in range(8):  # 8 waves for good balance
+        for i in range(8):  # 8 waves
             self.wave_phases.append({
                 'offset': 0,
-                'frequency': 1.0 + i * 0.06,  # Slightly different frequencies
-                'amplitude': 8,  # Increased amplitude for more waviness
-                'y_base': self.boundary + 5 + i * 5.5,  # Spaced for 8 waves
-                'alignment_phase': i * math.pi / 8  # Start with different phases
+                'frequency': 0.3 + i * 0.1,  # Individual frequencies like thermal columns
+                'current_amplitude': 5,  # Current amplitude (smoothly animated)
+                'target_amplitude': 5,  # Target amplitude (changes over time)
+                'y_base': self.boundary + 5 + i * 5.5,  # Vertical positions
+                'phase_offset': random.uniform(0, math.pi * 2),  # Random starting phase like thermal
+                'energy': 0  # Wave energy level
             })
-        
-        # Alignment oscillator (causes waves to sync/desync)
-        self.alignment = 0
-        self.alignment_speed = 0.3
         
     def update(self, dt: float) -> bool:
         if not super().update(dt):
@@ -1553,13 +1554,25 @@ class GeometricAnimation(BaseAnimation):
         # Orange scrolls right
         self.orange_scroll += dt * 1.5
         
-        # Waves scroll right (same direction as orange) at similar speeds
-        for i, wave in enumerate(self.wave_phases):
-            wave['offset'] += dt * (1.2 + i * 0.05)  # Scroll right like orange zone
-            wave['alignment_phase'] += dt * 0.15  # Slower drift for subtle movement
+        # Update global phase (like thermal columns)
+        self.global_phase += dt * 0.5
         
-        # Oscillate alignment (causes interference patterns)
-        self.alignment = math.sin(self.phase * self.alignment_speed)
+        # Update waves with thermal-style physics
+        for i, wave in enumerate(self.wave_phases):
+            # Scroll waves right
+            wave['offset'] += dt * (1.2 + i * 0.05)
+            
+            # Generate new target amplitude based on global phase (like thermal columns)
+            phase = self.global_phase + wave['phase_offset']
+            amplitude_factor = math.sin(phase * wave['frequency']) * 0.5 + 0.5
+            wave['target_amplitude'] = 3 + amplitude_factor * 7  # Range from 3 to 10
+            
+            # Smooth transition to target (spectrum analyzer physics)
+            amp_diff = wave['target_amplitude'] - wave['current_amplitude']
+            wave['current_amplitude'] += amp_diff * 0.3  # Smooth momentum
+            
+            # Update wave energy (affects how waves interact)
+            wave['energy'] = wave['current_amplitude'] / 10
         
         return True
     
@@ -1575,20 +1588,20 @@ class GeometricAnimation(BaseAnimation):
                     if intensity > 0.7:
                         draw.point((x+1, y), fill=1)
         
-        # === BLUE ZONE - Clean sine waves with subtle alignment drift ===
+        # === BLUE ZONE - Ocean waves with thermal-style smooth amplitude changes ===
         for wave in self.wave_phases:
             points = []
             
-            # Simple sine wave calculation
+            # Use smoothly animated amplitude (like thermal columns)
+            amplitude = wave['current_amplitude']
+            
+            # Simple sine wave with smooth physics
             for x in range(0, self.config.width, 2):
                 # Clean sine wave
-                phase = x * 0.05 * wave['frequency'] + wave['offset']
+                phase = x * 0.05 + wave['offset']
                 
-                # Subtle alignment drift (less tangled, more coherent)
-                drift = math.sin(wave['alignment_phase']) * 2
-                
-                # Calculate clean wave height
-                y = wave['y_base'] + int(math.sin(phase) * wave['amplitude']) + int(drift)
+                # Calculate wave height with smooth amplitude
+                y = wave['y_base'] + int(math.sin(phase) * amplitude)
                 
                 if self.boundary < y < self.config.height:
                     points.append((x, y))
