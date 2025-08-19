@@ -1533,13 +1533,13 @@ class GeometricAnimation(BaseAnimation):
         
         # Blue zone waves (scroll left)
         self.wave_phases = []
-        for i in range(5):  # 5 waves
+        for i in range(4):  # 4 clean waves
             self.wave_phases.append({
                 'offset': 0,
-                'frequency': 0.8 + i * 0.15,  # Different frequencies
-                'amplitude': 5 + i * 1.5,  # Different amplitudes
-                'y_base': self.boundary + 8 + i * 9,  # Vertical positions
-                'alignment_phase': random.uniform(0, math.pi * 2)
+                'frequency': 1.0 + i * 0.1,  # Slightly different frequencies
+                'amplitude': 6,  # Consistent amplitude for cleaner look
+                'y_base': self.boundary + 10 + i * 10,  # Even spacing
+                'alignment_phase': i * math.pi / 4  # Start with different phases
             })
         
         # Alignment oscillator (causes waves to sync/desync)
@@ -1553,10 +1553,10 @@ class GeometricAnimation(BaseAnimation):
         # Orange scrolls right
         self.orange_scroll += dt * 1.5
         
-        # Waves scroll left at different speeds
+        # Waves scroll left at similar speeds for cleaner look
         for i, wave in enumerate(self.wave_phases):
-            wave['offset'] -= dt * (1.0 + i * 0.2)  # Different speeds
-            wave['alignment_phase'] += dt * 0.2  # Slow drift
+            wave['offset'] -= dt * (1.2 + i * 0.05)  # Very similar speeds
+            wave['alignment_phase'] += dt * 0.15  # Slower drift for subtle movement
         
         # Oscillate alignment (causes interference patterns)
         self.alignment = math.sin(self.phase * self.alignment_speed)
@@ -1575,25 +1575,20 @@ class GeometricAnimation(BaseAnimation):
                     if intensity > 0.7:
                         draw.point((x+1, y), fill=1)
         
-        # === BLUE ZONE - Complex wave interference ===
+        # === BLUE ZONE - Clean sine waves with subtle alignment drift ===
         for wave in self.wave_phases:
             points = []
             
-            # Calculate alignment factor (0 = chaotic, 1 = aligned)
-            align_factor = (math.sin(wave['alignment_phase']) * 0.5 + 0.5) * self.alignment
-            
+            # Simple sine wave calculation
             for x in range(0, self.config.width, 2):
-                # Base wave
-                base_phase = x * 0.05 * wave['frequency'] + wave['offset']
+                # Clean sine wave
+                phase = x * 0.05 * wave['frequency'] + wave['offset']
                 
-                # Add alignment influence (causes waves to sync/desync)
-                aligned_phase = base_phase + align_factor * math.pi
+                # Subtle alignment drift (less tangled, more coherent)
+                drift = math.sin(wave['alignment_phase']) * 2
                 
-                # Calculate wave height with interference
-                y = wave['y_base'] + int(math.sin(aligned_phase) * wave['amplitude'])
-                
-                # Add subtle secondary oscillation for richness
-                y += int(math.sin(x * 0.02 + self.phase) * 2)
+                # Calculate clean wave height
+                y = wave['y_base'] + int(math.sin(phase) * wave['amplitude']) + int(drift)
                 
                 if self.boundary < y < self.config.height:
                     points.append((x, y))
