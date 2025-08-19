@@ -42,6 +42,7 @@ class AnimationType(Enum):
     SPECTRUM = "spectrum"
     NEURAL = "neural"
     HORIZON = "horizon"
+    THERMAL = "thermal"
 
 
 @dataclass
@@ -826,6 +827,217 @@ class EnhancedStarfieldAnimation(BaseAnimation):
                             draw.rectangle([x, y, x+1, y+1], fill=1)
 
 
+class ThermalColumnsAnimation(BaseAnimation):
+    """Thermal Columns - Vertical spectrum analyzer with hot/cold collision dynamics"""
+    
+    def __init__(self, config: AnimationConfig):
+        super().__init__(config)
+        
+        # Color boundary where hot and cold collide
+        self.boundary = 16
+        
+        # 8 vertical columns across the width
+        self.num_columns = 8
+        self.column_width = config.width // self.num_columns - 1
+        
+        # Each column has hot (descending) and cold (ascending) components
+        self.columns = []
+        for i in range(self.num_columns):
+            self.columns.append({
+                # Hot component (orange zone, grows downward)
+                'hot_height': 0,
+                'hot_target': 0,
+                'hot_peak': 0,
+                'hot_peak_decay': 0,
+                
+                # Cold component (blue zone, grows upward)
+                'cold_height': 0,
+                'cold_target': 0,
+                'cold_peak': 0,
+                'cold_peak_decay': 0,
+                
+                # Collision energy at boundary
+                'collision_energy': 0,
+                'collision_particles': [],
+                
+                # Phase offset for organic movement
+                'phase_offset': random.uniform(0, math.pi * 2),
+                'frequency': 0.3 + i * 0.1
+            })
+        
+        # Collision splash particles
+        self.splash_particles = []
+        
+        # Global energy wave that influences all columns
+        self.global_phase = 0
+        
+        # Visual effects at boundary
+        self.boundary_glow = 0
+        self.boundary_pulse = 0
+    
+    def update(self, dt: float) -> bool:
+        if not super().update(dt):
+            return False
+        
+        self.global_phase += dt * 0.5
+        
+        # Update each column
+        for i, col in enumerate(self.columns):
+            # Generate new target heights (like spectrum analyzer)
+            phase = self.global_phase + col['phase_offset']
+            
+            # Hot target (orange zone, 0 to boundary)
+            hot_factor = math.sin(phase * col['frequency']) * 0.5 + 0.5
+            col['hot_target'] = hot_factor * (self.boundary - 4)
+            
+            # Cold target (blue zone, boundary to height)
+            cold_factor = math.sin(phase * col['frequency'] * 1.3 + math.pi/3) * 0.5 + 0.5
+            col['cold_target'] = cold_factor * (self.config.height - self.boundary - 4)
+            
+            # Smooth transitions (spectrum analyzer physics)
+            hot_diff = col['hot_target'] - col['hot_height']
+            col['hot_height'] += hot_diff * 0.3
+            
+            cold_diff = col['cold_target'] - col['cold_height']
+            col['cold_height'] += cold_diff * 0.3
+            
+            # Update hot peaks
+            if col['hot_height'] > col['hot_peak']:
+                col['hot_peak'] = col['hot_height']
+                col['hot_peak_decay'] = 0
+            else:
+                col['hot_peak_decay'] += dt * 15
+                col['hot_peak'] = max(0, col['hot_peak'] - col['hot_peak_decay'])
+            
+            # Update cold peaks
+            if col['cold_height'] > col['cold_peak']:
+                col['cold_peak'] = col['cold_height']
+                col['cold_peak_decay'] = 0
+            else:
+                col['cold_peak_decay'] += dt * 15
+                col['cold_peak'] = max(0, col['cold_peak'] - col['cold_peak_decay'])
+            
+            # Calculate collision energy when both components are strong
+            hot_proximity = col['hot_height'] / self.boundary if self.boundary > 0 else 0
+            cold_proximity = col['cold_height'] / (self.config.height - self.boundary) if (self.config.height - self.boundary) > 0 else 0
+            
+            new_collision = hot_proximity * cold_proximity
+            col['collision_energy'] = col['collision_energy'] * 0.9 + new_collision * 0.1
+            
+            # Generate collision particles when energy is high
+            if col['collision_energy'] > 0.3 and random.random() < col['collision_energy']:
+                x_center = i * (self.column_width + 1) + self.column_width // 2
+                
+                # Create splash particles
+                for _ in range(3):
+                    self.splash_particles.append({
+                        'x': x_center + random.uniform(-self.column_width, self.column_width),
+                        'y': self.boundary + random.uniform(-2, 2),
+                        'vx': random.uniform(-1, 1),
+                        'vy': random.uniform(-0.5, 0.5),
+                        'life': 1.0,
+                        'size': random.choice([1, 2])
+                    })
+        
+        # Update splash particles
+        for particle in self.splash_particles[:]:
+            particle['x'] += particle['vx']
+            particle['y'] += particle['vy']
+            particle['life'] -= dt * 2
+            
+            if particle['life'] <= 0 or particle['x'] < 0 or particle['x'] >= self.config.width:
+                self.splash_particles.remove(particle)
+        
+        # Update boundary effects
+        total_collision = sum(col['collision_energy'] for col in self.columns)
+        self.boundary_glow = min(1.0, total_collision / len(self.columns))
+        self.boundary_pulse = math.sin(self.global_phase * 3) * self.boundary_glow
+        
+        # Limit particles for performance
+        if len(self.splash_particles) > 30:
+            self.splash_particles = self.splash_particles[-30:]
+        
+        return True
+    
+    def render(self, draw: ImageDraw) -> None:
+        # Draw each column
+        for i, col in enumerate(self.columns):
+            x = i * (self.column_width + 1)
+            
+            # === HOT COMPONENT (Orange zone, grows downward from top) ===
+            hot_height = int(col['hot_height'])
+            if hot_height > 0:
+                # Main hot bar growing downward
+                draw.rectangle([x, 0,
+                              x + self.column_width - 1, hot_height], fill=1)
+                
+                # Hot peak indicator
+                peak_y = int(col['hot_peak'])
+                if peak_y > 1 and peak_y < self.boundary - 1:
+                    draw.line([(x, peak_y), (x + self.column_width - 1, peak_y)], fill=1)
+            
+            # === COLD COMPONENT (Blue zone, grows upward from bottom) ===
+            cold_height = int(col['cold_height'])
+            if cold_height > 0:
+                # Main cold bar growing upward
+                draw.rectangle([x, self.config.height - cold_height,
+                              x + self.column_width - 1, self.config.height - 1], fill=1)
+                
+                # Cold peak indicator
+                peak_y = self.config.height - int(col['cold_peak'])
+                if peak_y < self.config.height - 1 and peak_y > self.boundary + 1:
+                    draw.line([(x, peak_y), (x + self.column_width - 1, peak_y)], fill=1)
+            
+            # === COLLISION ZONE ===
+            if col['collision_energy'] > 0.1:
+                # Draw collision effect at boundary
+                center_x = x + self.column_width // 2
+                intensity = int(col['collision_energy'] * 3)
+                
+                for offset in range(-intensity, intensity + 1):
+                    if 0 <= center_x + offset < self.config.width:
+                        draw.point((center_x + offset, self.boundary), fill=1)
+                        if col['collision_energy'] > 0.5:
+                            draw.point((center_x + offset, self.boundary + 1), fill=1)
+                            draw.point((center_x + offset, self.boundary - 1), fill=1)
+        
+        # Draw boundary line with glow effect
+        if self.boundary_glow > 0.1:
+            # Main boundary
+            draw.line([(0, self.boundary), (self.config.width - 1, self.boundary)], fill=1)
+            
+            # Glow above and below when energy is high
+            if self.boundary_glow > 0.5:
+                for x in range(0, self.config.width, 2):
+                    if random.random() < self.boundary_pulse:
+                        draw.point((x, self.boundary - 1), fill=1)
+                        draw.point((x, self.boundary + 1), fill=1)
+        
+        # Draw splash particles
+        for particle in self.splash_particles:
+            x, y = int(particle['x']), int(particle['y'])
+            if 0 <= x < self.config.width and 0 <= y < self.config.height:
+                if particle['size'] == 1:
+                    draw.point((x, y), fill=1)
+                else:
+                    if particle['life'] > 0.5:  # Larger when fresh
+                        draw.rectangle([x, y, x+1, y+1], fill=1)
+                    else:
+                        draw.point((x, y), fill=1)
+        
+        # Draw energy indicators on sides
+        if self.boundary_glow > 0.3:
+            # Left side - hot energy flowing down
+            for y in range(0, self.boundary, 3):
+                if random.random() < self.boundary_glow:
+                    draw.point((0, y), fill=1)
+            
+            # Right side - cold energy flowing up
+            for y in range(self.boundary, self.config.height, 3):
+                if random.random() < self.boundary_glow:
+                    draw.point((self.config.width - 1, y), fill=1)
+
+
 class HorizonAnimation(BaseAnimation):
     """
     Lava Lamp Animation for Portrait OLED with color zones
@@ -1582,7 +1794,8 @@ class OLEDController:
             AnimationType.WAVES: WaveAnimation,
             AnimationType.SPIRAL: SpiralAnimation,
             AnimationType.GLITCH: GlitchAnimation,
-            AnimationType.HORIZON: HorizonAnimation
+            AnimationType.HORIZON: HorizonAnimation,
+            AnimationType.THERMAL: ThermalColumnsAnimation
         }
         self.running = False
         # Preview-related attributes
