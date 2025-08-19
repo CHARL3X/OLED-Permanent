@@ -1520,60 +1520,87 @@ class BreathAnimation(BaseAnimation):
 
 
 class GeometricAnimation(BaseAnimation):
-    """Wave patterns for color zones"""
+    """Complex wave interference patterns with independent scrolling"""
     
     def __init__(self, config: AnimationConfig):
         super().__init__(config)
-        self.pattern_phase = 0
         
         # Color boundary
         self.boundary = 16
         
-        # Grid for zigzag pattern in orange zone
-        self.grid_cols = 8
-        self.grid_spacing = config.width // self.grid_cols
+        # Orange zone (scrolls right)
+        self.orange_scroll = 0
         
-        # Wave parameters for blue zone
-        self.wave_amplitude = 10
-        self.wave_layers = 3
+        # Blue zone waves (scroll left)
+        self.wave_phases = []
+        for i in range(5):  # 5 waves
+            self.wave_phases.append({
+                'offset': 0,
+                'frequency': 0.8 + i * 0.15,  # Different frequencies
+                'amplitude': 5 + i * 1.5,  # Different amplitudes
+                'y_base': self.boundary + 8 + i * 9,  # Vertical positions
+                'alignment_phase': random.uniform(0, math.pi * 2)
+            })
+        
+        # Alignment oscillator (causes waves to sync/desync)
+        self.alignment = 0
+        self.alignment_speed = 0.3
         
     def update(self, dt: float) -> bool:
         if not super().update(dt):
             return False
-            
-        self.pattern_phase += dt
         
-        # Slowly vary the amplitude for organic movement
-        self.wave_amplitude = 10 + math.sin(self.pattern_phase * 0.3) * 3
+        # Orange scrolls right
+        self.orange_scroll += dt * 1.5
+        
+        # Waves scroll left at different speeds
+        for i, wave in enumerate(self.wave_phases):
+            wave['offset'] -= dt * (1.0 + i * 0.2)  # Different speeds
+            wave['alignment_phase'] += dt * 0.2  # Slow drift
+        
+        # Oscillate alignment (causes interference patterns)
+        self.alignment = math.sin(self.phase * self.alignment_speed)
         
         return True
     
     def render(self, draw: ImageDraw) -> None:
-        # === ORANGE ZONE - Tight zigzag pattern ===
-        for row in range(2, self.boundary - 2, 3):
-            for col in range(self.grid_cols):
-                x = col * self.grid_spacing + (row % 2) * (self.grid_spacing // 2)
-                x = int(x + math.sin(self.pattern_phase * 2) * 3)
-                if 0 <= x < self.config.width:
-                    draw.point((x, row), fill=1)
-                    draw.point((x+1, row), fill=1)
+        # === ORANGE ZONE - Scrolling right pattern ===
+        for x in range(0, self.config.width, 3):
+            # Create a flowing pattern that scrolls right
+            phase = (x * 0.1) - self.orange_scroll
+            for y in range(2, self.boundary - 2):
+                intensity = math.sin(phase + y * 0.3) * 0.5 + 0.5
+                if intensity > 0.4:
+                    draw.point((x, y), fill=1)
+                    if intensity > 0.7:
+                        draw.point((x+1, y), fill=1)
         
-        # === BLUE ZONE - Simple flowing waves ===
-        # Just 2 clean wave lines
-        for wave_num in range(2):
-            row_base = self.boundary + 20 + wave_num * 30
-            phase_offset = wave_num * math.pi / 2
+        # === BLUE ZONE - Complex wave interference ===
+        for wave in self.wave_phases:
+            points = []
             
-            for x in range(0, self.config.width, 2):  # Every other pixel for cleaner look
-                wave_offset = math.sin(x * 0.15 + self.pattern_phase + phase_offset) * self.wave_amplitude
-                y = row_base + int(wave_offset)
+            # Calculate alignment factor (0 = chaotic, 1 = aligned)
+            align_factor = (math.sin(wave['alignment_phase']) * 0.5 + 0.5) * self.alignment
+            
+            for x in range(0, self.config.width, 2):
+                # Base wave
+                base_phase = x * 0.05 * wave['frequency'] + wave['offset']
+                
+                # Add alignment influence (causes waves to sync/desync)
+                aligned_phase = base_phase + align_factor * math.pi
+                
+                # Calculate wave height with interference
+                y = wave['y_base'] + int(math.sin(aligned_phase) * wave['amplitude'])
+                
+                # Add subtle secondary oscillation for richness
+                y += int(math.sin(x * 0.02 + self.phase) * 2)
                 
                 if self.boundary < y < self.config.height:
-                    draw.point((x, y), fill=1)
-                    if x > 0:  # Connect points for smoother wave
-                        prev_y = row_base + int(math.sin((x-2) * 0.15 + self.pattern_phase + phase_offset) * self.wave_amplitude)
-                        if abs(y - prev_y) < 10:
-                            draw.line([(x-2, prev_y), (x, y)], fill=1)
+                    points.append((x, y))
+            
+            # Draw connected lines for smoother waves
+            for i in range(len(points) - 1):
+                draw.line([points[i], points[i+1]], fill=1, width=1)
 
 
 class ParticleAnimation(BaseAnimation):
