@@ -1553,9 +1553,9 @@ class GeometricAnimation(BaseAnimation):
         # Orange scrolls right
         self.orange_scroll += dt * 1.5
         
-        # Waves scroll left at similar speeds for cleaner look
+        # Waves scroll right (same direction as orange) at similar speeds
         for i, wave in enumerate(self.wave_phases):
-            wave['offset'] -= dt * (1.2 + i * 0.05)  # Very similar speeds
+            wave['offset'] += dt * (1.2 + i * 0.05)  # Scroll right like orange zone
             wave['alignment_phase'] += dt * 0.15  # Slower drift for subtle movement
         
         # Oscillate alignment (causes interference patterns)

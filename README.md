@@ -1,25 +1,33 @@
-# OLED Permanent Controller
+# OLED Permanent Animation System
 
-Standalone animation controller for permanently mounted SSD1306 OLED displays on Raspberry Pi.
+Advanced animation controller for SSD1306 OLED displays with hardware color zones (orange top ~16 rows, blue bottom ~48 rows).
 
 ## Features
 
-- **9 Beautiful Animations**:
-  - Starfield - Space travel with nebula effects
-  - Cylon Scanner - Knight Rider scanning effect
-  - Breath - Calming pulsing patterns
-  - Geometric - Mathematical Lissajous figures and spirals
-  - Oscilloscope - Scientific waveform visualization
-  - Matrix - Falling digital rain
-  - Particles - Physics-based particle system
-  - Waves - Overlapping wave patterns
-  - Spiral - Animated spiral patterns
+- **14+ Unique Animations** optimized for tiny 128x64 display
+- **Live Preview**: Interactive menu with real-time animation preview while selecting
+- **Color Zone Aware**: Animations creatively utilize hardware's orange/blue zones
+- **Modular Architecture**: Clean BaseAnimation class for easy extension
+- **Smooth Physics**: Momentum-based transitions (diff * 0.3) for fluid movement
 
-- **Flexible Control**:
-  - Run single animations
-  - Auto-cycle through animations
-  - Configurable timing and FPS
-  - Support for rotated displays
+### Zone-Aware Animations
+- **Horizon (Lava Lamp)**: Hot/cold fluid dynamics at color boundary
+- **Thermal Columns**: Vertical spectrum with collision dynamics  
+- **Geometric**: Complex wave interference with opposing scroll directions
+
+### Classic Animations
+- **Spectrum Analyzer**: Audio-reactive vertical bars with peak indicators
+- **Neural Network**: Calming ASMR neural activity visualization
+- **Oscilloscope**: Professional waveform display
+- **Matrix**: Digital rain effect
+- **Starfield**: Depth-based stars with warp speed events
+- **Signal Wave**: Clean sine wave visualization
+- **Spiral**: Rotating dot patterns
+- **Glitch**: Digital corruption aesthetic
+- **Particles**: Physics-based particle system
+- **Waves**: Ocean wave simulation
+- **Cylon**: Classic scanning pattern
+- **Breath**: Pulsing brightness effect
 
 ## Installation
 
