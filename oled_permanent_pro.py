@@ -1746,123 +1746,62 @@ class WaveAnimation(BaseAnimation):
 
 
 class SpiralAnimation(BaseAnimation):
-    """Dual vortex spiral optimized for color zones"""
+    """Simple rotating dots for each color zone"""
     
     def __init__(self, config: AnimationConfig):
         super().__init__(config)
         self.boundary = 16
         
-        # Orange zone spiral (outward)
-        self.orange_center_x = config.width // 2
-        self.orange_center_y = 8
-        self.orange_rotation = 0
+        # Simple rotating dots
+        self.rotation = 0
         
-        # Blue zone spiral (inward)
-        self.blue_center_x = config.width // 2
-        self.blue_center_y = self.boundary + (config.height - self.boundary) // 2
-        self.blue_rotation = 0
+        # Orange zone - small circle of dots
+        self.orange_dots = 5
+        self.orange_radius = 6
         
-        # Transfer particles between spirals
-        self.transfer_particles = []
-        
-        # Spiral points cache
-        self.orange_points = []
-        self.blue_points = []
+        # Blue zone - larger pattern
+        self.blue_dots = 12  
+        self.blue_radius = 20
         
     def update(self, dt: float) -> bool:
         if not super().update(dt):
             return False
             
-        # Update rotations at different speeds
-        self.orange_rotation += dt * 3  # Fast outward
-        self.blue_rotation -= dt * 1.5  # Slow inward
-        
-        # Generate orange spiral points (outward)
-        self.orange_points = []
-        for i in range(15):
-            t = i * 0.2
-            r = t * 1.5  # Smaller, tighter spiral
-            angle = -t + self.orange_rotation  # Outward spiral
-            
-            x = self.orange_center_x + r * math.cos(angle)
-            y = self.orange_center_y + r * math.sin(angle) * 0.4  # More compressed
-            
-            if 0 <= x < self.config.width and 0 <= y < self.boundary - 1:
-                self.orange_points.append((x, y, 1.0))  # Consistent intensity
-        
-        # Generate blue spiral points (inward)
-        self.blue_points = []
-        for i in range(40):
-            t = (40 - i) * 0.5  # Reverse for inward
-            r = t * 1.5
-            angle = t + self.blue_rotation
-            
-            x = self.blue_center_x + r * math.cos(angle)
-            y = self.blue_center_y + r * math.sin(angle)
-            
-            if 0 <= x < self.config.width and self.boundary < y < self.config.height:
-                intensity = 1.0 - (i / 40)  # Fade as going inward
-                self.blue_points.append((x, y, intensity))
-        
-        # Create transfer particles at boundary
-        if random.random() < 0.3:
-            # Particle jumps from orange to blue
-            if len(self.orange_points) > 0:
-                last_orange = self.orange_points[-1]
-                self.transfer_particles.append({
-                    'x': last_orange[0],
-                    'y': self.boundary,
-                    'vy': 2,
-                    'life': 1.0
-                })
-        
-        # Update transfer particles
-        for particle in self.transfer_particles[:]:
-            particle['y'] += particle['vy']
-            particle['life'] -= dt * 2
-            if particle['life'] <= 0 or particle['y'] > self.config.height:
-                self.transfer_particles.remove(particle)
+        # Simple rotation
+        self.rotation += dt * 2
         
         return True
     
     def render(self, draw: ImageDraw) -> None:
-        # === ORANGE ZONE - Outward spiral ===
-        for i, (x, y, intensity) in enumerate(self.orange_points):
-            draw.point((int(x), int(y)), fill=1)
-            # Connect points for smooth spiral
-            if i > 0:
-                prev_x, prev_y, _ = self.orange_points[i-1]
-                if abs(x - prev_x) < 8 and abs(y - prev_y) < 8:
-                    draw.line([(prev_x, prev_y), (x, y)], fill=1)
+        # Orange zone - small rotating circle
+        center_x = self.config.width // 2
+        center_y = 8
         
-        # === BLUE ZONE - Inward spiral ===
-        for i, (x, y, intensity) in enumerate(self.blue_points):
-            if intensity > 0.1:
-                if intensity > 0.5:
-                    draw.rectangle([x-1, y-1, x+1, y+1], outline=1)
-                else:
-                    draw.point((int(x), int(y)), fill=1)
+        for i in range(self.orange_dots):
+            angle = self.rotation + (i * 2 * math.pi / self.orange_dots)
+            x = center_x + self.orange_radius * math.cos(angle)
+            y = center_y + self.orange_radius * math.sin(angle) * 0.5
             
-            # Connect points
-            if i > 0:
-                prev_x, prev_y, prev_int = self.blue_points[i-1]
-                if abs(x - prev_x) < 15 and abs(y - prev_y) < 15 and intensity > 0.2:
-                    draw.line([(prev_x, prev_y), (x, y)], fill=1)
-        
-        # Draw transfer particles
-        for particle in self.transfer_particles:
-            x, y = int(particle['x']), int(particle['y'])
-            if particle['life'] > 0.5:
+            if 0 <= x < self.config.width and 0 <= y < self.boundary:
                 draw.rectangle([x-1, y-1, x+1, y+1], fill=1)
-            else:
-                draw.point((x, y), fill=1)
         
-        # Draw boundary line
-        draw.line([(0, self.boundary), (self.config.width - 1, self.boundary)], fill=1)
+        # Blue zone - larger rotating pattern
+        center_y = self.boundary + (self.config.height - self.boundary) // 2
         
-        # Add vortex centers
-        draw.point((self.orange_center_x, self.orange_center_y), fill=1)
-        draw.point((self.blue_center_x, self.blue_center_y), fill=1)
+        for i in range(self.blue_dots):
+            angle = -self.rotation * 0.7 + (i * 2 * math.pi / self.blue_dots)
+            x = center_x + self.blue_radius * math.cos(angle)
+            y = center_y + self.blue_radius * math.sin(angle)
+            
+            if 0 <= x < self.config.width and self.boundary < y < self.config.height:
+                # Draw trailing dots
+                for j in range(3):
+                    trail_angle = angle - j * 0.2
+                    trail_x = center_x + (self.blue_radius - j * 3) * math.cos(trail_angle)
+                    trail_y = center_y + (self.blue_radius - j * 3) * math.sin(trail_angle)
+                    
+                    if 0 <= trail_x < self.config.width and self.boundary < trail_y < self.config.height:
+                        draw.point((int(trail_x), int(trail_y)), fill=1)
 
 
 class GlitchAnimation(BaseAnimation):
@@ -1975,9 +1914,7 @@ class GlitchAnimation(BaseAnimation):
                 y = random.randint(0, self.boundary - 1)
                 draw.point((x, y), fill=1)
         
-        # === BOUNDARY - Corruption spreading ===
-        draw.line([(0, self.boundary), (self.config.width - 1, self.boundary)], fill=1)
-        
+        # === Corruption spreading (no boundary line) ===
         if self.corruption_spreading:
             # Show corruption spreading down
             for x in range(0, self.config.width, 4):
