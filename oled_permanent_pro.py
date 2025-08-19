@@ -1001,17 +1001,11 @@ class ThermalColumnsAnimation(BaseAnimation):
                             draw.point((center_x + offset, self.boundary + 1), fill=1)
                             draw.point((center_x + offset, self.boundary - 1), fill=1)
         
-        # Draw boundary line with glow effect
-        if self.boundary_glow > 0.1:
-            # Main boundary
-            draw.line([(0, self.boundary), (self.config.width - 1, self.boundary)], fill=1)
-            
-            # Glow above and below when energy is high
-            if self.boundary_glow > 0.5:
-                for x in range(0, self.config.width, 2):
-                    if random.random() < self.boundary_pulse:
-                        draw.point((x, self.boundary - 1), fill=1)
-                        draw.point((x, self.boundary + 1), fill=1)
+        # Glow effect at boundary (no line)
+        if self.boundary_glow > 0.5:
+            for x in range(0, self.config.width, 3):
+                if random.random() < self.boundary_pulse:
+                    draw.point((x, self.boundary), fill=1)
         
         # Draw splash particles
         for particle in self.splash_particles:
@@ -1238,14 +1232,8 @@ class HorizonAnimation(BaseAnimation):
                 if abs(offset) > 1:
                     draw.point((int(x + offset), y), fill=1)
         
-        # === THERMAL BOUNDARY (Row 16) ===
-        # Draw dynamic boundary with thermal mixing
-        for x in range(self.config.width):
-            # Wavy boundary showing thermal interaction
-            wave_offset = math.sin(x * 0.1 + self.thermal_waves[0]['phase']) * 1
-            boundary_y = self.color_boundary + int(wave_offset)
-            if 0 <= boundary_y < self.config.height:
-                draw.point((x, boundary_y), fill=1)
+        # === THERMAL MIXING (no boundary line) ===
+        # Just show steam particles at transition zone
         
         # Draw steam particles at boundary
         for steam in self.steam_particles:
@@ -1655,8 +1643,7 @@ class GeometricAnimation(BaseAnimation):
                         if random.random() < fade:
                             draw.rectangle([x, y, x+7, y+7], fill=1)
         
-        # Always draw boundary line
-        draw.line([(0, self.boundary), (self.config.width - 1, self.boundary)], fill=1)
+        # No boundary line
 
 
 class ParticleAnimation(BaseAnimation):
