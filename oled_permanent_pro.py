@@ -1746,105 +1746,271 @@ class WaveAnimation(BaseAnimation):
 
 
 class SpiralAnimation(BaseAnimation):
-    """Animated spiral patterns"""
+    """Dual vortex spiral optimized for color zones"""
     
     def __init__(self, config: AnimationConfig):
         super().__init__(config)
-        self.spiral_count = 3
+        self.boundary = 16
+        
+        # Orange zone spiral (outward)
+        self.orange_center_x = config.width // 2
+        self.orange_center_y = 8
+        self.orange_rotation = 0
+        
+        # Blue zone spiral (inward)
+        self.blue_center_x = config.width // 2
+        self.blue_center_y = self.boundary + (config.height - self.boundary) // 2
+        self.blue_rotation = 0
+        
+        # Transfer particles between spirals
+        self.transfer_particles = []
+        
+        # Spiral points cache
+        self.orange_points = []
+        self.blue_points = []
         
     def update(self, dt: float) -> bool:
         if not super().update(dt):
             return False
+            
+        # Update rotations at different speeds
+        self.orange_rotation += dt * 3  # Fast outward
+        self.blue_rotation -= dt * 1.5  # Slow inward
+        
+        # Generate orange spiral points (outward)
+        self.orange_points = []
+        for i in range(15):
+            t = i * 0.2
+            r = t * 1.5  # Smaller, tighter spiral
+            angle = -t + self.orange_rotation  # Outward spiral
+            
+            x = self.orange_center_x + r * math.cos(angle)
+            y = self.orange_center_y + r * math.sin(angle) * 0.4  # More compressed
+            
+            if 0 <= x < self.config.width and 0 <= y < self.boundary - 1:
+                self.orange_points.append((x, y, 1.0))  # Consistent intensity
+        
+        # Generate blue spiral points (inward)
+        self.blue_points = []
+        for i in range(40):
+            t = (40 - i) * 0.5  # Reverse for inward
+            r = t * 1.5
+            angle = t + self.blue_rotation
+            
+            x = self.blue_center_x + r * math.cos(angle)
+            y = self.blue_center_y + r * math.sin(angle)
+            
+            if 0 <= x < self.config.width and self.boundary < y < self.config.height:
+                intensity = 1.0 - (i / 40)  # Fade as going inward
+                self.blue_points.append((x, y, intensity))
+        
+        # Create transfer particles at boundary
+        if random.random() < 0.3:
+            # Particle jumps from orange to blue
+            if len(self.orange_points) > 0:
+                last_orange = self.orange_points[-1]
+                self.transfer_particles.append({
+                    'x': last_orange[0],
+                    'y': self.boundary,
+                    'vy': 2,
+                    'life': 1.0
+                })
+        
+        # Update transfer particles
+        for particle in self.transfer_particles[:]:
+            particle['y'] += particle['vy']
+            particle['life'] -= dt * 2
+            if particle['life'] <= 0 or particle['y'] > self.config.height:
+                self.transfer_particles.remove(particle)
+        
         return True
     
     def render(self, draw: ImageDraw) -> None:
-        center_x = self.config.width // 2
-        center_y = self.config.height // 2
+        # === ORANGE ZONE - Outward spiral ===
+        for i, (x, y, intensity) in enumerate(self.orange_points):
+            draw.point((int(x), int(y)), fill=1)
+            # Connect points for smooth spiral
+            if i > 0:
+                prev_x, prev_y, _ = self.orange_points[i-1]
+                if abs(x - prev_x) < 8 and abs(y - prev_y) < 8:
+                    draw.line([(prev_x, prev_y), (x, y)], fill=1)
         
-        for spiral in range(self.spiral_count):
-            points = []
-            phase_offset = spiral * 2 * math.pi / self.spiral_count
+        # === BLUE ZONE - Inward spiral ===
+        for i, (x, y, intensity) in enumerate(self.blue_points):
+            if intensity > 0.1:
+                if intensity > 0.5:
+                    draw.rectangle([x-1, y-1, x+1, y+1], outline=1)
+                else:
+                    draw.point((int(x), int(y)), fill=1)
             
-            for i in range(50):
-                t = i * 0.15
-                r = t * 5
-                angle = t + self.phase + phase_offset
-                
-                x = center_x + r * math.cos(angle)
-                y = center_y + r * math.sin(angle)
-                
-                if 0 <= x < self.config.width and 0 <= y < self.config.height:
-                    points.append((x, y))
-            
-            if len(points) > 1:
-                draw.line(points, fill=1, width=1)
+            # Connect points
+            if i > 0:
+                prev_x, prev_y, prev_int = self.blue_points[i-1]
+                if abs(x - prev_x) < 15 and abs(y - prev_y) < 15 and intensity > 0.2:
+                    draw.line([(prev_x, prev_y), (x, y)], fill=1)
+        
+        # Draw transfer particles
+        for particle in self.transfer_particles:
+            x, y = int(particle['x']), int(particle['y'])
+            if particle['life'] > 0.5:
+                draw.rectangle([x-1, y-1, x+1, y+1], fill=1)
+            else:
+                draw.point((x, y), fill=1)
+        
+        # Draw boundary line
+        draw.line([(0, self.boundary), (self.config.width - 1, self.boundary)], fill=1)
+        
+        # Add vortex centers
+        draw.point((self.orange_center_x, self.orange_center_y), fill=1)
+        draw.point((self.blue_center_x, self.blue_center_y), fill=1)
 
 
 class GlitchAnimation(BaseAnimation):
-    """Digital glitch effect animation"""
+    """Data corruption glitch optimized for color zones"""
     
     def __init__(self, config: AnimationConfig):
         super().__init__(config)
-        self.glitch_zones = []
-        self.static_lines = []
+        self.boundary = 16
+        
+        # Orange zone - simple scan lines
+        self.orange_scan_line = 0
+        self.orange_static_level = 0
+        
+        # Blue zone - data corruption blocks
+        self.blue_blocks = []
+        self.blue_data_streams = []
+        
+        # Initialize data streams
+        for x in range(0, config.width, 8):
+            self.blue_data_streams.append({
+                'x': x,
+                'data': [random.randint(0, 1) for _ in range(20)],
+                'scroll_speed': random.uniform(0.5, 2),
+                'scroll_pos': 0
+            })
+        
+        # Glitch states
         self.glitch_intensity = 0
+        self.corruption_spreading = False
+        self.recovery_timer = 0
+        
+        # Cascade effect
+        self.cascade_y = 0
         
     def update(self, dt: float) -> bool:
         if not super().update(dt):
             return False
             
-        # Random glitch intensity changes
-        if random.random() < 0.1:
-            self.glitch_intensity = random.uniform(0, 1)
-        else:
-            self.glitch_intensity *= 0.95
+        # Random glitch events
+        if random.random() < 0.05:
+            self.glitch_intensity = random.uniform(0.3, 1.0)
+            self.corruption_spreading = True
+            self.cascade_y = 0
+            
+        # Decay glitch intensity
+        self.glitch_intensity *= 0.97
         
-        # Update glitch zones
-        if random.random() < self.glitch_intensity:
-            self.glitch_zones = []
-            for _ in range(random.randint(1, 5)):
-                self.glitch_zones.append({
-                    'x': random.randint(0, self.config.width - 20),
-                    'y': random.randint(0, self.config.height - 10),
-                    'w': random.randint(10, 30),
-                    'h': random.randint(5, 15),
-                    'offset': random.randint(-10, 10)
-                })
+        # Update orange zone
+        self.orange_scan_line = (self.orange_scan_line + dt * 30) % self.boundary
+        self.orange_static_level = self.glitch_intensity
         
-        # Update static lines
-        self.static_lines = []
-        for _ in range(int(10 * self.glitch_intensity)):
-            self.static_lines.append(random.randint(0, self.config.height - 1))
+        # Update blue zone data streams
+        for stream in self.blue_data_streams:
+            stream['scroll_pos'] += stream['scroll_speed'] * dt
+            if stream['scroll_pos'] > 1:
+                stream['scroll_pos'] = 0
+                # Corrupt data occasionally
+                if random.random() < self.glitch_intensity:
+                    for i in range(len(stream['data'])):
+                        if random.random() < 0.3:
+                            stream['data'][i] = 1 - stream['data'][i]
+        
+        # Generate corruption blocks
+        if self.corruption_spreading and random.random() < self.glitch_intensity:
+            self.blue_blocks.append({
+                'x': random.randint(0, self.config.width - 16),
+                'y': random.randint(self.boundary, self.config.height - 16),
+                'w': random.randint(8, 16),
+                'h': random.randint(8, 16),
+                'life': 1.0,
+                'type': random.choice(['solid', 'lines', 'dots'])
+            })
+        
+        # Update corruption blocks
+        for block in self.blue_blocks[:]:
+            block['life'] -= dt * 2
+            if block['life'] <= 0:
+                self.blue_blocks.remove(block)
+        
+        # Cascade effect
+        if self.corruption_spreading:
+            self.cascade_y += dt * 60
+            if self.cascade_y > self.config.height:
+                self.corruption_spreading = False
+        
+        # System recovery
+        if self.glitch_intensity < 0.1 and random.random() < 0.01:
+            self.recovery_timer = 0.5
+            # Clear corruptions
+            self.blue_blocks = []
+            for stream in self.blue_data_streams:
+                stream['data'] = [random.randint(0, 1) for _ in range(20)]
+        
+        if self.recovery_timer > 0:
+            self.recovery_timer -= dt
         
         return True
     
     def render(self, draw: ImageDraw) -> None:
-        # Draw base pattern (grid)
-        for x in range(0, self.config.width, 8):
-            draw.line([(x, 0), (x, self.config.height)], fill=1)
-        for y in range(0, self.config.height, 8):
-            draw.line([(0, y), (self.config.width, y)], fill=1)
+        # === ORANGE ZONE - Simple interference ===
+        # Horizontal scan line
+        scan_y = int(self.orange_scan_line)
+        if scan_y < self.boundary:
+            draw.line([(0, scan_y), (self.config.width - 1, scan_y)], fill=1)
         
-        # Draw glitch zones
-        for zone in self.glitch_zones:
-            # Draw displaced rectangle
-            for y in range(zone['y'], min(zone['y'] + zone['h'], self.config.height)):
-                x_start = zone['x'] + zone['offset']
-                x_end = min(x_start + zone['w'], self.config.width)
-                if x_start >= 0 and x_end > x_start:
-                    draw.line([(x_start, y), (x_end, y)], fill=1)
+        # Minimal static when glitching
+        if self.orange_static_level > 0.2:
+            for _ in range(int(self.orange_static_level * 20)):
+                x = random.randint(0, self.config.width - 1)
+                y = random.randint(0, self.boundary - 1)
+                draw.point((x, y), fill=1)
         
-        # Draw static lines
-        for y in self.static_lines:
-            for x in range(0, self.config.width, 2):
-                if random.random() < 0.5:
+        # === BOUNDARY - Corruption spreading ===
+        draw.line([(0, self.boundary), (self.config.width - 1, self.boundary)], fill=1)
+        
+        if self.corruption_spreading:
+            # Show corruption spreading down
+            for x in range(0, self.config.width, 4):
+                if random.random() < self.glitch_intensity:
+                    y = self.boundary + int(self.cascade_y) % (self.config.height - self.boundary)
                     draw.point((x, y), fill=1)
         
-        # Random noise
-        for _ in range(int(100 * self.glitch_intensity)):
-            x = random.randint(0, self.config.width - 1)
-            y = random.randint(0, self.config.height - 1)
-            draw.point((x, y), fill=1)
+        # === BLUE ZONE - Simplified data corruption ===
+        # Draw only a few data streams
+        for i, stream in enumerate(self.blue_data_streams[::2]):  # Every other stream
+            x = stream['x']
+            for j, bit in enumerate(stream['data'][::3]):  # Every 3rd bit
+                y = self.boundary + 10 + j * 8 + int(stream['scroll_pos'] * 8)
+                if y < self.config.height - 5 and bit:
+                    draw.line([(x, y), (x + 4, y)], fill=1)
+        
+        # Draw fewer, simpler corruption blocks
+        for block in self.blue_blocks[:3]:  # Max 3 blocks
+            if block['type'] == 'lines':
+                for y in range(block['y'], min(block['y'] + block['h'], self.config.height), 4):
+                    draw.line([(block['x'], y), (block['x'] + block['w'], y)], fill=1)
+            else:  # Just dots, no solid blocks
+                for x in range(block['x'], min(block['x'] + block['w'], self.config.width), 3):
+                    for y in range(block['y'], min(block['y'] + block['h'], self.config.height), 3):
+                        if random.random() < 0.5:
+                            draw.point((x, y), fill=1)
+        
+        # Recovery flash
+        if self.recovery_timer > 0:
+            if int(self.recovery_timer * 10) % 2 == 0:
+                # Flash effect
+                for y in range(0, self.config.height, 8):
+                    draw.line([(0, y), (self.config.width - 1, y)], fill=1)
 
 
 class OLEDController:
