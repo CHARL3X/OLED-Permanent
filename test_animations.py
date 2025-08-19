@@ -19,7 +19,8 @@ animations = [
     "waves",
     "spiral",
     "spectrum",
-    "neural"
+    "neural",
+    "horizon"
 ]
 
 print("Testing all animations (3 seconds each)...")

@@ -41,6 +41,7 @@ class AnimationType(Enum):
     SPIRAL = "spiral"
     SPECTRUM = "spectrum"
     NEURAL = "neural"
+    HORIZON = "horizon"
 
 
 @dataclass
@@ -825,6 +826,303 @@ class EnhancedStarfieldAnimation(BaseAnimation):
                             draw.rectangle([x, y, x+1, y+1], fill=1)
 
 
+class HorizonAnimation(BaseAnimation):
+    """
+    Lava Lamp Animation for Portrait OLED with color zones
+    
+    Hardware: 128x64 OLED in portrait orientation
+    - Top ~16 rows: Orange pixels (hot zone - fire/lava)
+    - Bottom ~112 rows: Blue pixels (cool zone - water/ice)
+    
+    Animation uses vertical thermal dynamics where hot bubbles rise
+    and cool drops fall, creating a natural lava lamp effect that
+    respects the hardware's color zones.
+    """
+    
+    def __init__(self, config: AnimationConfig):
+        super().__init__(config)
+        
+        # Color boundary at row 16 (orange above = hot, blue below = cool)
+        self.color_boundary = 16
+        
+        # Lava bubbles (hot, rising)
+        self.lava_bubbles = []
+        for _ in range(5):
+            self.lava_bubbles.append({
+                'x': random.uniform(10, config.width - 10),
+                'y': random.uniform(config.height - 20, config.height),
+                'radius': random.uniform(3, 8),
+                'speed': random.uniform(0.3, 0.8),
+                'wobble_phase': random.uniform(0, math.pi * 2),
+                'wobble_speed': random.uniform(1, 2),
+                'temperature': 1.0,  # Hot
+                'lifetime': 0
+            })
+        
+        # Water drops (cool, falling)
+        self.water_drops = []
+        for _ in range(4):
+            self.water_drops.append({
+                'x': random.uniform(10, config.width - 10),
+                'y': random.uniform(-10, 10),
+                'radius': random.uniform(2, 5),
+                'speed': random.uniform(0.4, 1.0),
+                'stretch': 1.0,
+                'temperature': 0.0  # Cool
+            })
+        
+        # Thermal particles (small effects)
+        self.particles = []
+        
+        # Fire flickers in orange zone
+        self.fire_points = []
+        for _ in range(8):
+            self.fire_points.append({
+                'x': random.uniform(5, config.width - 5),
+                'base_y': random.uniform(2, self.color_boundary - 2),
+                'flicker_phase': random.uniform(0, math.pi * 2),
+                'intensity': random.uniform(0.5, 1.0)
+            })
+        
+        # Ice crystals in blue zone
+        self.ice_crystals = []
+        for _ in range(6):
+            self.ice_crystals.append({
+                'x': random.uniform(5, config.width - 5),
+                'y': random.uniform(config.height - 30, config.height - 5),
+                'size': random.randint(2, 4),
+                'rotation': random.uniform(0, math.pi * 2),
+                'spin_speed': random.uniform(-0.5, 0.5)
+            })
+        
+        # Thermal gradient waves
+        self.thermal_waves = []
+        for i in range(3):
+            self.thermal_waves.append({
+                'phase': random.uniform(0, math.pi * 2),
+                'speed': 0.5 + i * 0.2,
+                'amplitude': 2 + i
+            })
+        
+        # Steam/mist at boundary
+        self.steam_particles = []
+        
+        # Thermal convection current visualization
+        self.convection_phase = 0
+        
+    def update(self, dt: float) -> bool:
+        if not super().update(dt):
+            return False
+        
+        self.convection_phase += dt * 0.5
+        
+        # Update lava bubbles (rising)
+        for bubble in self.lava_bubbles[:]:
+            # Rise with wobble
+            bubble['y'] -= bubble['speed']
+            bubble['wobble_phase'] += dt * bubble['wobble_speed']
+            bubble['x'] += math.sin(bubble['wobble_phase']) * 0.3
+            bubble['lifetime'] += dt
+            
+            # Cool down as it rises
+            if bubble['y'] < self.color_boundary + 10:
+                bubble['temperature'] = max(0, bubble['temperature'] - dt * 0.5)
+            
+            # Reset when reaches top or cools completely
+            if bubble['y'] < -bubble['radius'] or bubble['temperature'] <= 0:
+                bubble['y'] = self.config.height + bubble['radius']
+                bubble['x'] = random.uniform(10, self.config.width - 10)
+                bubble['radius'] = random.uniform(3, 8)
+                bubble['speed'] = random.uniform(0.3, 0.8)
+                bubble['temperature'] = 1.0
+                bubble['lifetime'] = 0
+        
+        # Update water drops (falling)
+        for drop in self.water_drops[:]:
+            # Fall with acceleration
+            drop['y'] += drop['speed']
+            drop['speed'] = min(drop['speed'] + dt * 0.1, 2.0)
+            
+            # Stretch as it falls
+            drop['stretch'] = 1.0 + drop['speed'] * 0.3
+            
+            # Reset when reaches bottom
+            if drop['y'] > self.config.height + drop['radius']:
+                drop['y'] = -drop['radius']
+                drop['x'] = random.uniform(10, self.config.width - 10)
+                drop['radius'] = random.uniform(2, 5)
+                drop['speed'] = random.uniform(0.4, 1.0)
+                drop['stretch'] = 1.0
+        
+        # Update fire flickers
+        for fire in self.fire_points:
+            fire['flicker_phase'] += dt * 3
+            fire['intensity'] = 0.5 + 0.5 * math.sin(fire['flicker_phase'])
+        
+        # Update ice crystals
+        for crystal in self.ice_crystals:
+            crystal['rotation'] += crystal['spin_speed'] * dt
+            # Slight drift
+            crystal['x'] += math.sin(self.convection_phase + crystal['rotation']) * 0.1
+        
+        # Update thermal waves
+        for wave in self.thermal_waves:
+            wave['phase'] += dt * wave['speed']
+        
+        # Generate steam particles at boundary
+        self.steam_particles = []
+        if random.random() < 0.3:
+            for _ in range(3):
+                self.steam_particles.append({
+                    'x': random.uniform(5, self.config.width - 5),
+                    'y': self.color_boundary + random.randint(-2, 2),
+                    'life': random.uniform(0.5, 1.0)
+                })
+        
+        # Update existing steam
+        for steam in self.steam_particles[:]:
+            steam['y'] -= 0.5  # Rise slowly
+            steam['life'] -= dt
+            if steam['life'] <= 0:
+                self.steam_particles.remove(steam)
+        
+        # Generate thermal particles
+        self.particles = []
+        for bubble in self.lava_bubbles:
+            if bubble['temperature'] > 0.5 and random.random() < 0.1:
+                self.particles.append({
+                    'x': bubble['x'] + random.uniform(-bubble['radius'], bubble['radius']),
+                    'y': bubble['y'],
+                    'vx': random.uniform(-0.5, 0.5),
+                    'vy': random.uniform(-1, -0.5),
+                    'life': 1.0
+                })
+        
+        return True
+    
+    def render(self, draw: ImageDraw) -> None:
+        # === HOT ZONE (Orange pixels, top 16 rows) ===
+        
+        # Draw fire/flame effects
+        for fire in self.fire_points:
+            x = int(fire['x'])
+            y = int(fire['base_y'] + math.sin(fire['flicker_phase']) * 2)
+            
+            if fire['intensity'] > 0.3:
+                # Flame shape
+                draw.point((x, y), fill=1)
+                if fire['intensity'] > 0.6:
+                    draw.point((x-1, y+1), fill=1)
+                    draw.point((x+1, y+1), fill=1)
+                if fire['intensity'] > 0.8:
+                    draw.point((x, y-1), fill=1)
+        
+        # Draw convection currents in hot zone
+        for i in range(3):
+            x = self.config.width // 4 * (i + 1)
+            for y in range(2, self.color_boundary - 2, 3):
+                phase = self.convection_phase + i * math.pi / 3
+                offset = math.sin(phase + y * 0.2) * 2
+                if abs(offset) > 1:
+                    draw.point((int(x + offset), y), fill=1)
+        
+        # === THERMAL BOUNDARY (Row 16) ===
+        # Draw dynamic boundary with thermal mixing
+        for x in range(self.config.width):
+            # Wavy boundary showing thermal interaction
+            wave_offset = math.sin(x * 0.1 + self.thermal_waves[0]['phase']) * 1
+            boundary_y = self.color_boundary + int(wave_offset)
+            if 0 <= boundary_y < self.config.height:
+                draw.point((x, boundary_y), fill=1)
+        
+        # Draw steam particles at boundary
+        for steam in self.steam_particles:
+            x, y = int(steam['x']), int(steam['y'])
+            if steam['life'] > 0.5:
+                draw.point((x, y), fill=1)
+                draw.point((x+1, y), fill=1)
+            else:
+                draw.point((x, y), fill=1)
+        
+        # === COOL ZONE (Blue pixels, below row 16) ===
+        
+        # Draw thermal gradient waves
+        for wave_idx, wave in enumerate(self.thermal_waves):
+            y_base = self.color_boundary + 10 + wave_idx * 20
+            if y_base < self.config.height:
+                for x in range(0, self.config.width, 2):
+                    y = y_base + int(math.sin(x * 0.1 + wave['phase']) * wave['amplitude'])
+                    if self.color_boundary < y < self.config.height:
+                        draw.point((x, y), fill=1)
+        
+        # Draw lava bubbles (rising)
+        for bubble in self.lava_bubbles:
+            x, y = int(bubble['x']), int(bubble['y'])
+            r = int(bubble['radius'])
+            
+            if bubble['temperature'] > 0.7:
+                # Hot bubble - filled
+                draw.ellipse([x-r, y-r, x+r, y+r], fill=1)
+                # Add glow effect
+                draw.ellipse([x-r-1, y-r-1, x+r+1, y+r+1], outline=1)
+            elif bubble['temperature'] > 0.3:
+                # Cooling bubble - outlined
+                draw.ellipse([x-r, y-r, x+r, y+r], outline=1)
+                # Partial fill
+                if random.random() < bubble['temperature']:
+                    draw.ellipse([x-r+1, y-r+1, x+r-1, y+r-1], fill=1)
+            else:
+                # Cool bubble - just outline
+                draw.ellipse([x-r, y-r, x+r, y+r], outline=1)
+        
+        # Draw water drops (falling)
+        for drop in self.water_drops:
+            x, y = int(drop['x']), int(drop['y'])
+            r = int(drop['radius'])
+            stretch = drop['stretch']
+            
+            # Stretched ellipse for falling drop
+            draw.ellipse([x-r, y-int(r*stretch), x+r, y+int(r*stretch)], outline=1)
+            
+            # Add trail effect
+            if drop['speed'] > 1.0:
+                for i in range(1, 3):
+                    trail_y = y - i * 2
+                    if trail_y > self.color_boundary:
+                        draw.point((x, trail_y), fill=1)
+        
+        # Draw ice crystals at bottom
+        for crystal in self.ice_crystals:
+            x, y = int(crystal['x']), int(crystal['y'])
+            size = crystal['size']
+            rot = crystal['rotation']
+            
+            # Draw crystalline pattern
+            for angle in range(0, 360, 60):  # Hexagonal
+                rad = math.radians(angle + math.degrees(rot))
+                end_x = x + int(math.cos(rad) * size)
+                end_y = y + int(math.sin(rad) * size)
+                draw.line([(x, y), (end_x, end_y)], fill=1)
+        
+        # Draw thermal particles
+        for particle in self.particles:
+            if 0 <= particle['x'] < self.config.width and 0 <= particle['y'] < self.config.height:
+                draw.point((int(particle['x']), int(particle['y'])), fill=1)
+        
+        # Add subtle convection indicators on sides
+        # Left side - hot rising
+        for y in range(self.config.height - 10, self.color_boundary, -5):
+            if random.random() < 0.3:
+                draw.point((2, y), fill=1)
+                draw.line([(2, y), (2, y-2)], fill=1)
+        
+        # Right side - cool falling  
+        for y in range(self.color_boundary, self.config.height - 10, 5):
+            if random.random() < 0.3:
+                draw.point((self.config.width - 3, y), fill=1)
+                draw.line([(self.config.width - 3, y), (self.config.width - 3, y+2)], fill=1)
+
+
 class ProfessionalMatrixAnimation(BaseAnimation):
     """Enhanced Matrix rain with better characters"""
     
@@ -1283,7 +1581,8 @@ class OLEDController:
             AnimationType.PARTICLES: ParticleAnimation,
             AnimationType.WAVES: WaveAnimation,
             AnimationType.SPIRAL: SpiralAnimation,
-            AnimationType.GLITCH: GlitchAnimation
+            AnimationType.GLITCH: GlitchAnimation,
+            AnimationType.HORIZON: HorizonAnimation
         }
         self.running = False
         # Preview-related attributes
