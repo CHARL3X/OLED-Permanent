@@ -20,9 +20,11 @@ try:
     from luma.core.interface.serial import i2c
     from luma.oled.device import ssd1306
     from PIL import Image, ImageDraw, ImageFont
-except ImportError:
+    from i2c_helper import initialize_display_with_fallback
+except ImportError as e:
     print("Error: Required libraries not installed")
-    print("Run: pip install luma.oled pillow")
+    print("Run: pip install luma.oled pillow smbus2")
+    print(f"Details: {e}")
     sys.exit(1)
 
 
@@ -2474,13 +2476,15 @@ class OLEDController:
         self.preview_lock = threading.Lock()
         
     def initialize(self):
-        """Initialize the OLED display"""
+        """Initialize the OLED display with automatic fallback to multiplexer"""
         try:
-            serial = i2c(port=self.config.i2c_port, address=self.config.i2c_address)
-            self.device = ssd1306(serial, width=self.config.width, height=self.config.height,
-                                 rotate=self.config.rotation)
-            print(f"Display initialized at 0x{self.config.i2c_address:02X}")
-            return True
+            # Use the helper function that handles both direct and multiplexed connections
+            self.device = initialize_display_with_fallback(self.config)
+            
+            if self.device:
+                return True
+            else:
+                return False
         except Exception as e:
             print(f"Failed to initialize display: {e}")
             return False
